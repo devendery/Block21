@@ -5,7 +5,6 @@ import { useWallet } from "@/hooks/useWallet";
 import { ethers } from "ethers";
 import { ArrowDown, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
 import { B21_CONTRACT_ADDRESS } from "@/lib/utils";
-import B21Coin from "@/components/ui/B21Coin";
 
 declare global {
     interface Window {
@@ -153,7 +152,7 @@ export default function SwapWidget() {
       {/* Arrow */}
       <div className="flex justify-center -my-3 relative z-10">
         <div className="bg-gray-800 p-2 rounded-full border border-gray-700">
-            <ArrowDown className="h-4 w-4 text-gold-500" />
+            <ArrowDown className="h-4 w-4 text-red-500" />
         </div>
       </div>
 
@@ -171,18 +170,9 @@ export default function SwapWidget() {
                 className="bg-transparent text-2xl font-bold text-white outline-none w-full placeholder-gray-600"
                 placeholder="0"
             />
-             <div className="flex items-center gap-2 bg-gold-500/10 px-3 py-1 rounded-full border border-gold-500/30 h-8">
-                <span className="inline-flex items-center relative scale-[0.3] origin-center w-[24px] justify-center">
-                    <span className="relative inline-flex items-center justify-center">
-                        <span className="relative z-10 text-[#FFD700] text-5xl drop-shadow-[0_0_15px_rgba(212,175,55,0.9)] font-serif italic font-bold tracking-wider">B</span>
-                        <span className="absolute inset-0 flex items-center justify-center pointer-events-none gap-[5px] rotate-[12deg]">
-                            <span className="w-[3px] h-[95%] bg-[#FFD700] rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.3)]"></span>
-                            <span className="w-[3px] h-[95%] bg-[#FFD700] rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.3)]"></span>
-                        </span>
-                    </span>
-                    <span className="text-[#FFD700] text-3xl font-black ml-1 drop-shadow-[0_0_15px_rgba(212,175,55,0.9)]">21</span>
-                </span>
-                <span className="font-bold text-sm text-gold-500">B21</span>
+             <div className="flex items-center gap-2 bg-red-500/10 px-3 py-1 rounded-full border border-red-500/30 h-8">
+                <InstitutionalB21Logo size={24} variant="v1" theme="obsidian" />
+                <span className="font-bold text-sm text-red-500">B21</span>
             </div>
         </div>
       </div>
@@ -191,7 +181,7 @@ export default function SwapWidget() {
       <button 
         onClick={handleBuy}
         disabled={loading}
-        className="w-full py-4 bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-black font-black text-lg rounded-xl transition-all shadow-lg shadow-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        className="w-full py-4 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-black text-lg rounded-xl transition-all shadow-lg shadow-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         {loading ? <Loader2 className="animate-spin" /> : "Buy with USDT"}
       </button>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Logo from "./Logo";
-import B21Symbol from "@/components/ui/B21Symbol";
+import InstitutionalB21Logo from "@/components/ui/InstitutionalB21Logo";
 import { Instagram, AtSign, Send, Loader2, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
 import { GOOGLE_SCRIPT_URL } from "@/lib/utils";
@@ -39,7 +39,7 @@ export default function Footer() {
   };
 
   return (
-    <footer className="border-t border-red-500/30 pt-24 pb-14 relative overflow-hidden bg-gradient-to-r from-red-900 via-red-800 to-red-900 backdrop-blur-md">
+    <footer className="border-t border-red-900/30 pt-24 pb-14 relative overflow-hidden bg-gradient-to-r from-black via-zinc-900 to-black backdrop-blur-md">
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         
@@ -48,10 +48,7 @@ export default function Footer() {
             {/* Brand */}
             <div>
                 <Link href="/" className="flex items-center gap-3 mb-8 group">
-                    <B21Symbol className="w-10 h-10 group-hover:rotate-12 transition-transform" />
-                    <span className="text-2xl font-heading font-black tracking-tighter text-white">
-                        BLOCK<span className="text-gold-500">21</span>
-                    </span>
+                    <Logo />
                 </Link>
                 <p className="text-gray-400 text-sm leading-relaxed mb-6">
                     No ICO. No Pre-Sale. Just 2.1M fixed supply and complete transparency. The digital asset built on Bitcoin philosophy and Polygon efficiency.

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Check, X, Scale, Lock, Zap, Brain, TrendingDown } from 'lucide-react';
-import B21Coin from "@/components/ui/B21Coin";
+import InstitutionalB21Logo from "@/components/ui/InstitutionalB21Logo";
 
 export const metadata: Metadata = {
   title: 'Learn - Block21',
@@ -62,26 +62,10 @@ export default function LearnPage() {
                     <span className="hidden md:inline-flex items-center gap-1 font-heading">Bitcoin (BTC)</span>
                     <span className="md:hidden inline-flex items-center font-heading">BTC</span>
                 </div>
-                <div className="col-span-4 md:col-span-5 font-bold text-gold-500 text-center text-xs tracking-wider flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 rounded-full bg-gold-500/20 text-gold-500 flex items-center justify-center text-[10px] font-bold">$</span> 
-                    <span className="hidden md:inline-flex items-center gap-1 font-heading">Block21 (<span className="inline-flex items-center relative scale-[0.3] origin-center w-[20px] h-[20px] justify-center">
-                        <span className="relative inline-flex items-center justify-center">
-                            <span className="relative z-10 text-transparent bg-clip-text bg-metallic-gold text-4xl lg:text-6xl font-heading font-bold tracking-wider drop-shadow-[0_0_15px_rgba(212,175,55,0.9)]">B</span>
-                            <span className="absolute inset-0 flex items-center justify-center pointer-events-none gap-[5px] rotate-[12deg]">
-                                <span className="w-[2px] h-[95%] bg-gradient-to-b from-[#FFD700] via-[#FDB931] to-[#9E7C0C] rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.3)]"></span>
-                                <span className="w-[2px] h-[95%] bg-gradient-to-b from-[#FFD700] via-[#FDB931] to-[#9E7C0C] rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.3)]"></span>
-                            </span>
-                        </span>
-                    </span>21)</span>
-                    <span className="md:hidden inline-flex items-center font-heading"><span className="inline-flex items-center relative scale-[0.3] origin-center w-[20px] h-[20px] justify-center">
-                        <span className="relative inline-flex items-center justify-center">
-                            <span className="relative z-10 text-transparent bg-clip-text bg-metallic-gold text-5xl drop-shadow-[0_0_15px_rgba(212,175,55,0.9)] font-heading tracking-wider">B</span>
-                            <span className="absolute inset-0 flex items-center justify-center pointer-events-none gap-[5px] rotate-[12deg]">
-                                <span className="w-[2px] h-[80%] bg-gradient-to-b from-[#FFD700] via-[#FDB931] to-[#9E7C0C] rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.3)]"></span>
-                                <span className="w-[2px] h-[80%] bg-gradient-to-b from-[#FFD700] via-[#FDB931] to-[#9E7C0C] rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.3)]"></span>
-                            </span>
-                        </span>
-                    </span>21</span>
+                <div className="col-span-4 md:col-span-5 font-bold text-red-500 text-center text-xs tracking-wider flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center text-[10px] font-bold">$</span> 
+                    <span className="hidden md:inline-flex items-center gap-1 font-heading">Block21 (<InstitutionalB21Logo size={24} variant="v1" theme="obsidian" />)</span>
+                    <span className="md:hidden inline-flex items-center font-heading"><InstitutionalB21Logo size={24} variant="v1" theme="obsidian" /></span>
                 </div>
             </div>
 
@@ -90,7 +74,7 @@ export default function LearnPage() {
                     <div key={index} className="grid grid-cols-12 p-4 hover:bg-white/5 transition-colors items-center group">
                         <div className="col-span-4 md:col-span-3 font-medium text-white/80 group-hover:text-white transition-colors text-xs md:text-sm pr-2">{row.category}</div>
                         <div className="col-span-4 md:col-span-4 text-center text-gray-500 group-hover:text-gray-400 transition-colors text-xs md:text-sm px-1 border-l border-white/5">{row.btc}</div>
-                        <div className="col-span-4 md:col-span-5 text-center text-white font-bold text-xs md:text-sm px-1 border-l border-white/5 group-hover:text-gold-500 transition-colors">{row.b21}</div>
+                        <div className="col-span-4 md:col-span-5 text-center text-white font-bold text-xs md:text-sm px-1 border-l border-white/5 group-hover:text-red-500 transition-colors">{row.b21}</div>
                     </div>
                 ))}
             </div>
@@ -99,13 +83,13 @@ export default function LearnPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             
             {/* HALVING LOGIC */}
-            <div className="glass-card rounded-2xl p-8 relative overflow-hidden group hover:border-gold-500/30 transition-all duration-500">
+            <div className="glass-card rounded-2xl p-8 relative overflow-hidden group hover:border-red-500/30 transition-all duration-500">
                 <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity duration-500">
-                    <Brain className="w-32 h-32 text-gold-500 rotate-12 transform group-hover:scale-110 transition-transform duration-500" />
+                    <Brain className="w-32 h-32 text-red-500 rotate-12 transform group-hover:scale-110 transition-transform duration-500" />
                 </div>
                 
                 <h3 className="text-2xl font-black text-white mb-6 flex items-center gap-3 relative z-10">
-                    <div className="p-2 rounded-lg bg-gold-500/10 text-gold-500">
+                    <div className="p-2 rounded-lg bg-red-500/10 text-red-500">
                         <Brain className="w-6 h-6" />
                     </div>
                     Halving Logic
@@ -185,9 +169,9 @@ export default function LearnPage() {
                         <span className="text-2xl font-black text-white">$0</span>
                     </div>
 
-                    <div className="flex items-center justify-between p-5 glass-panel rounded-xl border border-gold-500/20 hover:border-gold-500/40 transition-colors shadow-[0_0_15px_rgba(255,215,0,0.05)]">
+                    <div className="flex items-center justify-between p-5 glass-panel rounded-xl border border-red-500/20 hover:border-red-500/40 transition-colors shadow-[0_0_15px_rgba(255,0,51,0.05)]">
                         <span className="text-gray-300 font-medium">Block21 launched at</span>
-                        <span className="text-2xl font-black text-gold-500">$0</span>
+                        <span className="text-2xl font-black text-red-500">$0</span>
                     </div>
 
                     <div className="grid grid-cols-1 gap-3">
@@ -199,7 +183,7 @@ export default function LearnPage() {
                         ))}
                     </div>
 
-                    <div className="p-6 bg-gradient-to-br from-gold/10 to-transparent rounded-xl border border-gold/10 backdrop-blur-sm">
+                    <div className="p-6 bg-gradient-to-br from-red-500/10 to-transparent rounded-xl border border-red-500/10 backdrop-blur-sm">
                         <p className="text-gray-300 leading-relaxed italic text-center font-medium">
                             "Initial liquidity was intentionally small, allowing organic market discovery instead of artificial pricing."
                         </p>

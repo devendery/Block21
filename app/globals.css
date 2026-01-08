@@ -3,18 +3,18 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 245, 247, 250; /* Soft White #F5F7FA */
-  --background-start-rgb: 11, 28, 45; /* Deep Navy #0B1C2D */
-  --background-end-rgb: 14, 14, 14; /* Charcoal #0E0E0E */
+  --foreground-rgb: 245, 245, 245; /* Platinum White */
+  --background-start-rgb: 5, 5, 5; /* Obsidian Black */
+  --background-end-rgb: 10, 10, 10; /* Deep Dark */
 }
 
 html {
-  background-color: #0B1C2D; /* Deep Navy Base */
+  background-color: #050505; /* Obsidian Base */
 }
 
 body {
   color: rgb(var(--foreground-rgb));
-  background-color: #0B1C2D; /* Deep Navy Base */
+  background-color: #050505; /* Obsidian Base */
   min-height: 100vh;
   overflow-x: hidden;
 }
@@ -22,34 +22,33 @@ body {
 @layer components {
   /* Minimal, Professional Card Style */
   .glass-card {
-    @apply bg-[#0E0E0E]/60 backdrop-blur-md border border-white/5 rounded-none hover:border-[#C9A44C]/30 transition-colors duration-300;
+    @apply bg-[#0A0A0A]/60 backdrop-blur-md border border-white/5 rounded-none hover:border-red-500/30 transition-colors duration-300;
   }
   
   .glass-panel {
-    @apply bg-[#0E0E0E]/40 backdrop-blur-sm border border-white/5 rounded-sm;
+    @apply bg-[#0A0A0A]/40 backdrop-blur-sm border border-white/5 rounded-sm;
   }
 
-  /* Matte Gold Text Gradient */
-  .text-gradient-gold {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-[#C9A44C] via-[#E6D391] to-[#C9A44C];
+  /* Neon Red Text Gradient */
+  .text-gradient-obsidian {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-[#FF0033] via-[#FF4D6D] to-[#FF0033];
   }
 
-  .glow-text-gold {
-    @apply drop-shadow-[0_0_10px_rgba(201,164,76,0.3)]; /* Reduced glow */
+  .glow-text-red {
+    @apply drop-shadow-[0_0_10px_rgba(255,0,51,0.5)]; /* Neon Red glow */
   }
 
-  .glow-border-gold {
-    @apply shadow-[0_0_10px_rgba(201,164,76,0.1)]; /* Reduced glow */
+  .glow-border-red {
+    @apply shadow-[0_0_10px_rgba(255,0,51,0.2)]; /* Red glow */
   }
 }
 
 .brand-hero-img {
   position: absolute;
   inset: 0;
-  background-image: url('/images/hero-gold.jpg');
-  background-size: cover;
-  background-position: center;
-  opacity: 0.45;
+  background-image: none; /* Removing gold image */
+  background-color: #050505;
+  opacity: 1;
   pointer-events: none;
   z-index: 0;
 }
@@ -58,8 +57,8 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(900px 360px at 70% 40%, rgba(201,164,76,0.12), transparent 60%),
-    linear-gradient(180deg, rgba(0,0,0,0.30), rgba(0,0,0,0.85));
+    radial-gradient(900px 360px at 70% 40%, rgba(255,0,51,0.08), transparent 60%),
+    linear-gradient(180deg, rgba(5,5,5,0.30), rgba(5,5,5,0.95));
   pointer-events: none;
   z-index: 0;
 }

@@ -13,30 +13,30 @@ const config: Config = {
         sans: ['var(--font-inter)', 'Inter', 'sans-serif'], 
       },
       colors: {
-        background: '#0B1C2D', // Deep Navy Blue
-        foreground: '#F5F7FA', // Soft White
-        primary: '#C9A44C', // Matte Gold
-        secondary: '#0E0E0E', // Charcoal Black (Stability)
-        accent: '#8A8F98', // Steel Gray
+        background: '#050505', // Obsidian Black
+        foreground: '#F5F5F5', // Platinum White
+        primary: '#FF0033', // Neon Red (Absolute Scarcity)
+        secondary: '#1A1A1A', // Dark Grey (Structure)
+        accent: '#525252', // Metallic Grey
         
-        // Brand Palette
+        // Brand Palette - Obsidian Theme
         brand: {
-          navy: '#0B1C2D',
-          gold: '#C9A44C',
-          charcoal: '#0E0E0E',
-          gray: '#8A8F98',
-          white: '#F5F7FA',
+          obsidian: '#050505',
+          red: '#FF0033',
+          dark: '#0A0A0A',
+          grey: '#525252',
+          white: '#FFFFFF',
         },
 
-        // Metallic Palette (Adjusted for Matte Gold)
-        gold: {
-          100: '#F4EBC8',
-          300: '#E6D391',
-          500: '#C9A44C', // Main Brand Gold
-          700: '#94762E',
-          900: '#5E4B1D',
+        // Metallic Palette (Obsidian/Platinum)
+        obsidian: {
+          100: '#D4D4D8',
+          300: '#A1A1AA',
+          500: '#525252', // Main Metal
+          700: '#27272A',
+          900: '#09090B',
         },
-        surface: '#0E0E0E', // Charcoal Black
+        surface: '#0A0A0A', // Deep Black Surface
       },
       keyframes: {
         shimmer: {

@@ -6,7 +6,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid
 } from "recharts";
 import Icon from "@/components/ui/AppIcon";
-import B21Coin from "@/components/ui/B21Coin";
+import InstitutionalB21Logo from "@/components/ui/InstitutionalB21Logo";
 
 // --- Data ---
 const DISTRIBUTION_DATA = [
@@ -139,7 +139,7 @@ export default function TokenomicsInteractive() {
       <div className="bg-card border border-border rounded-2xl p-8">
         <div className="flex items-center gap-3 mb-8">
             <div className="bg-primary/20 p-2 rounded-lg w-12 h-12 flex items-center justify-center overflow-hidden">
-                <B21Coin size={60} />
+                <InstitutionalB21Logo size={60} variant="v1" theme="obsidian" />
             </div>
             <h2 className="text-2xl font-bold text-foreground">BLOCK21 Philosophy</h2>
         </div>
@@ -331,7 +331,7 @@ export default function TokenomicsInteractive() {
          </div>
 
          <div className="glass-card p-5 flex items-start gap-3">
-             <div className="mt-0.5"><Icon name="ZapIcon" size={18} className="text-gold-500 animate-pulse" /></div>
+             <div className="mt-0.5"><Icon name="ZapIcon" size={18} className="text-red-500 animate-pulse" /></div>
              <div>
                   <h4 className="text-sm font-bold text-white mb-1">Utility-Driven Value</h4>
                   <p className="text-xs text-gray-400">

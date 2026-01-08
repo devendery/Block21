@@ -3,7 +3,7 @@
 import { useState } from "react";
 import PriceTicker from "@/components/PriceTicker";
 import { B21_CONTRACT_ADDRESS } from "@/lib/utils";
-import B21Coin from "@/components/ui/B21Coin";
+import InstitutionalB21Logo from "@/components/ui/InstitutionalB21Logo";
 
 export default function Markets() {
   const [activeTab, setActiveTab] = useState<"B21" | "BTC" | "ETH">("B21");
@@ -23,19 +23,10 @@ export default function Markets() {
         <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
             <button 
                 onClick={() => setActiveTab("B21")}
-                className={`px-6 py-3 text-sm font-bold rounded-t-xl transition-all relative overflow-hidden ${activeTab === "B21" ? "text-gold-500 bg-gold-500/10 border-b-2 border-gold-500" : "text-gray-500 hover:text-white hover:bg-white/5"}`}
+                className={`px-6 py-3 text-sm font-bold rounded-t-xl transition-all relative overflow-hidden ${activeTab === "B21" ? "text-red-500 bg-red-500/10 border-b-2 border-red-500" : "text-gray-500 hover:text-white hover:bg-white/5"}`}
             >
-                <span className="flex items-center gap-1 font-heading">
-                    <span className="inline-flex items-center relative scale-[0.3] origin-center w-[24px] justify-center">
-                        <span className="relative inline-flex items-center justify-center">
-                            <span className="relative z-10 text-transparent bg-clip-text bg-metallic-gold text-5xl drop-shadow-[0_0_15px_rgba(212,175,55,0.9)] font-heading font-bold tracking-wider">B</span>
-                            <span className="absolute inset-0 flex items-center justify-center pointer-events-none gap-[5px] rotate-[12deg]">
-                                <span className="w-[2px] h-[95%] bg-gradient-to-b from-[#FFD700] via-[#FDB931] to-[#9E7C0C] rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.3)]"></span>
-                                <span className="w-[2px] h-[95%] bg-gradient-to-b from-[#FFD700] via-[#FDB931] to-[#9E7C0C] rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.3)]"></span>
-                            </span>
-                        </span>
-                        <span className="text-transparent bg-clip-text bg-metallic-gold text-3xl font-black ml-1 drop-shadow-[0_0_15px_rgba(212,175,55,0.9)] font-heading">21</span>
-                    </span>
+                <span className="flex items-center gap-2 font-heading">
+                    <InstitutionalB21Logo size={24} variant="v1" theme="obsidian" />
                     / USDT
                 </span>
             </button>
