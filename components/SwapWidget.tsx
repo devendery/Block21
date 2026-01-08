@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useWallet } from "@/hooks/useWallet";
 import { ethers } from "ethers";
 import { ArrowDown, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
+import InstitutionalB21Logo from "./ui/InstitutionalB21Logo";
 import { B21_CONTRACT_ADDRESS } from "@/lib/utils";
 
 declare global {
