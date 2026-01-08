@@ -53,7 +53,7 @@ const config: Config = {
         shine: 'shine 3s linear infinite',
       },
       backgroundImage: {
-        'metallic-gold': 'linear-gradient(135deg, #FBC02D 0%, #FFD700 50%, #F57F17 100%)',
+        'metallic-gold': 'linear-gradient(135deg, #63b3ed 0%, #90cdf4 50%, #3182ce 100%)',
         'metallic-silver': 'linear-gradient(135deg, #E0E0E0 0%, #F5F5F5 50%, #9E9E9E 100%)',
         'glass-shine': 'linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.4) 25%, transparent 30%)',
         'aurora': 'radial-gradient(1000px 400px at 20% 10%, rgba(16,185,129,0.15), transparent 60%), radial-gradient(800px 300px at 80% 0%, rgba(14,165,233,0.15), transparent 60%)',
