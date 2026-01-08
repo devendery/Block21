@@ -1,8 +1,6 @@
 import type { Metadata } from 'next';
 import HeroSection from '@/components/homepage/HeroSection';
-import ValueEducationSection from '@/components/homepage/ValueEducationSection';
 import UnifiedTrustSection from '@/components/homepage/UnifiedTrustSection';
-import CTASection from '@/components/homepage/CTASection';
 
 export const metadata: Metadata = { 
   title: 'Block21 - Time Value', 
