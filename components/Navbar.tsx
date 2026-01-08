@@ -10,6 +10,7 @@ import WalletConnect from "./WalletConnect";
 
 const navItems = [
   { name: "Home", href: "/" },
+  { name: "Game", href: "/game" },
   { name: "Learn", href: "/learn" },
   { name: "Tokenomics", href: "/tokenomics" },
   { name: "Release Policy", href: "/release-policy" },
