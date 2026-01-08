@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // output: 'export', // Commented out to enable API routes on Netlify
+  output: 'export',
   images: {
     unoptimized: true,
   },
