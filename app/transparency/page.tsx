@@ -92,7 +92,7 @@ export default function TransparencyPage() {
           {/* Heading */}
           <div role="heading" aria-level={1} className="text-4xl lg:text-6xl font-black tracking-tight text-white mb-8 leading-tight font-heading">
             <span className="block text-gray-400 text-2xl lg:text-3xl mb-3 font-bold tracking-normal">Don't Trust. Verify.</span>
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-brand-gold via-gold-300 to-brand-gold drop-shadow-[0_2px_10px_rgba(201,164,76,0.3)]">
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-amber-500 via-amber-200 to-amber-500 drop-shadow-[0_2px_10px_rgba(201,164,76,0.3)]">
               100% On-Chain Transparency
             </span>
           </div>

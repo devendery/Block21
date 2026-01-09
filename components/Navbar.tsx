@@ -9,14 +9,14 @@ import Logo from "./Logo";
 import WalletConnect from "./WalletConnect";
 
 const navItems = [
-  { name: "Home", href: "/" },
   { name: "Game", href: "/game" },
+  { name: "Home", href: "/" },
   { name: "Learn", href: "/learn" },
-  { name: "Tokenomics", href: "/tokenomics" },
-  { name: "Release Policy", href: "/release-policy" },
   { name: "Roadmap", href: "/roadmap" },
-  { name: "Pitch deck", href: "/pitch" },
+  { name: "Tokenomics", href: "/tokenomics" },
   { name: "Transparency", href: "/transparency" },
+  { name: "Pitch Deck", href: "/pitch" },
+  { name: "Release Policy", href: "/release-policy" },
 ];
 
 export default function Navbar() {
@@ -26,21 +26,21 @@ export default function Navbar() {
   return (
     <nav className="border-b border-white/10 sticky top-0 z-50 bg-black/60 backdrop-blur-md overflow-hidden relative">
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="flex items-center justify-between h-16">
+      <div className="w-full px-4 sm:px-6 lg:px-8 relative z-10">
+        <div className="flex items-center justify-between h-24">
           <div className="flex items-center">
             <Link href="/" aria-label="Go to homepage" className="hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-primary rounded-md">
-              <Logo className="h-auto w-auto" />
+              <Logo className="h-auto w-auto scale-110" />
             </Link>
           </div>
           <div className="hidden md:block">
-            <div className="ml-10 flex items-baseline space-x-4">
+            <div className="ml-10 flex items-center space-x-6">
               {navItems.map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
                   className={cn(
-                    "px-3 py-2 rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary",
+                    "px-3 py-2 rounded-md text-base font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary whitespace-nowrap",
                     pathname === item.href
                       ? "text-primary bg-gray-900"
                       : "text-gray-300 hover:text-white hover:bg-gray-800"

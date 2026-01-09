@@ -26,7 +26,7 @@ export default function GamePage() {
           
           <h1 className="text-5xl md:text-7xl font-black mb-6 tracking-tight">
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-green-400 via-emerald-300 to-green-500">
-              NEO WORMS
+              Block 21
             </span>
             <span className="block text-2xl md:text-3xl text-gray-500 font-light mt-2 tracking-widest uppercase">
               Arena

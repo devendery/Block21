@@ -201,7 +201,7 @@ export default function MarketPage() {
 
         <div className="flex justify-center">
              <a 
-                href="https://dexscreener.com/" 
+                href="https://dexscreener.com/polygon/0x0227b2341debcbb8462729d52b0dc9003250db50" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-gray-800 to-gray-900 hover:from-gray-700 hover:to-gray-800 text-white rounded-xl transition-all border border-white/10 hover:border-white/20 shadow-lg hover:shadow-xl transform hover:-translate-y-1"

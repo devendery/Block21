@@ -413,7 +413,7 @@ export default function WormsGame({ onGameOver: onGameOverProp }: { onGameOver?:
       {!isPlaying && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm">
           <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500 mb-2 filter drop-shadow-lg">
-            NEO WORMS
+            Block 21 Arena
           </h1>
           <p className="text-white/60 mb-8 text-lg">Eat. Grow. Conquer.</p>
           

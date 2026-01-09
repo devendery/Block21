@@ -20,6 +20,11 @@ export const metadata: Metadata = {
     email: false,
     address: false,
   },
+  icons: {
+    icon: '/images/logo-obsidian-sovereign.svg',
+    shortcut: '/images/logo-obsidian-sovereign.svg',
+    apple: '/images/logo-obsidian-sovereign.svg',
+  },
 };
 
 export default function RootLayout({

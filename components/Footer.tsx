@@ -54,6 +54,11 @@ export default function Footer() {
                     No ICO. No Pre-Sale. Just 2.1M fixed supply and complete transparency. The digital asset built on Bitcoin philosophy and Polygon efficiency.
                 </p>
                 <div className="flex items-center gap-4">
+                    <a aria-label="X (Twitter)" href="https://x.com/Block20One" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-gray-900 border border-gray-800 flex items-center justify-center text-gray-400 hover:text-white hover:border-gray-600 transition-all group focus:outline-none focus:ring-2 focus:ring-primary">
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 group-hover:scale-110 transition-transform">
+                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                        </svg>
+                    </a>
                     <a aria-label="Instagram" href="https://instagram.com/block20one" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-gray-900 border border-gray-800 flex items-center justify-center text-gray-400 hover:text-white hover:border-gray-600 transition-all group focus:outline-none focus:ring-2 focus:ring-primary">
                         <Instagram className="w-4 h-4 group-hover:scale-110 transition-transform" />
                     </a>
@@ -71,11 +76,11 @@ export default function Footer() {
                 <h4 className="font-heading font-bold text-white mb-6">Platform</h4>
                 <ul className="space-y-4 text-sm text-gray-400">
                     <li><Link href="/" className="hover:text-primary transition-colors">Homepage</Link></li>
-                    <li><Link href="/tokenomics" className="hover:text-primary transition-colors">Tokenomics</Link></li>
+                    <li><Link href="/market" className="hover:text-primary transition-colors">Market</Link></li>
                     <li><Link href="/release-policy" className="hover:text-primary transition-colors">Release Policy</Link></li>
                     <li><Link href="/roadmap" className="hover:text-primary transition-colors">Roadmap</Link></li>
+                    <li><Link href="/tokenomics" className="hover:text-primary transition-colors">Tokenomics</Link></li>
                     <li><Link href="/transparency" className="hover:text-primary transition-colors">Transparency</Link></li>
-                    <li><Link href="/market" className="hover:text-primary transition-colors">Market</Link></li>
                 </ul>
             </div>
 
@@ -83,9 +88,9 @@ export default function Footer() {
             <div>
                 <h4 className="font-heading font-bold text-white mb-6">Resources</h4>
                 <ul className="space-y-4 text-sm text-gray-400">
-                    <li><Link href="/verify" className="hover:text-primary transition-colors">Verify contract</Link></li>
-                    <li><Link href="/learn" className="hover:text-primary transition-colors">Education</Link></li>
                     <li><Link href="/disclaimer" className="hover:text-primary transition-colors">Disclaimer</Link></li>
+                    <li><Link href="/learn" className="hover:text-primary transition-colors">Education</Link></li>
+                    <li><Link href="/verify" className="hover:text-primary transition-colors">Verify contract</Link></li>
                 </ul>
             </div>
 

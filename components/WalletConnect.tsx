@@ -22,7 +22,7 @@ export default function WalletConnect() {
   return (
     <button
       onClick={connectWallet}
-      className="flex items-center space-x-2 bg-primary hover:bg-orange-600 text-white px-4 py-2 rounded-full font-medium transition-all text-sm"
+      className="flex items-center space-x-2 bg-primary hover:bg-orange-600 text-white px-3 py-1 rounded-full font-medium transition-all text-sm"
     >
       <Wallet className="h-4 w-4" />
       <span>Connect Wallet</span>

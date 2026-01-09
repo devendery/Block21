@@ -16,7 +16,7 @@ import {
 
 export const metadata: Metadata = {
   title: 'Investor Pitch - Block21',
-  description: 'B21 Investor & Partner Pitch Deck: A fixed-supply utility token powering skill-based gaming in India.',
+  description: 'B21 Investor & Partner Pitch Deck: A fixed-supply utility token powering skill-based digital ecosystems.',
 };
 
 const MILESTONES = [
@@ -39,16 +39,13 @@ export default function PitchPage() {
         
         {/* Header / Positioning */}
         <div className="text-center space-y-6">
-          <div className="inline-block px-4 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-sm font-bold uppercase tracking-wider mb-4">
-            Investor / Partner Pitch (1-Page)
-          </div>
           <h1 className="text-4xl md:text-5xl font-heading font-black mb-6 tracking-tight">
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-white to-primary animate-gradient-x">
               Block21 (B21)
             </span>
           </h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            "B21 is a fixed-supply utility token powering skill-based digital ecosystems in India."
+            "B21 is a fixed-supply utility token powering skill-based digital ecosystems."
           </p>
         </div>
 
@@ -63,7 +60,7 @@ export default function PitchPage() {
               <h2 className="text-2xl font-heading font-bold text-white">What is B21?</h2>
             </div>
             <p className="text-lg text-gray-300 leading-relaxed">
-              A fixed-supply utility token powering skill-based gaming, learning, and rewards ecosystem in India.
+              A fixed-supply utility token powering skill-based gaming, learning, and rewards ecosystem.
             </p>
           </div>
 

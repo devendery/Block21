@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, BookOpen, BarChart3, Lock, ShieldCheck, Info, TrendingUp } from "lucide-react";
+import { ArrowRight, BookOpen, BarChart3, Lock, ShieldCheck, Info, TrendingUp, FileText } from "lucide-react";
 import InstitutionalB21Logo from "@/components/ui/InstitutionalB21Logo";
 import { useEffect, useState } from "react";
 import { getMarketData } from "@/lib/api";
@@ -10,7 +10,6 @@ import { getMarketData } from "@/lib/api";
 export default function HeroSection() {
   const [btcUsd, setBtcUsd] = useState<number | null>(null);
   const [b21Usd, setB21Usd] = useState<number | null>(null);
-  const [refreshCountdown, setRefreshCountdown] = useState(10);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
 
   const fetchPrice = async () => {
@@ -24,14 +23,8 @@ export default function HeroSection() {
   useEffect(() => {
     fetchPrice();
     const interval = setInterval(() => {
-      setRefreshCountdown((prev) => {
-        if (prev <= 1) {
-          fetchPrice();
-          return 10;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+      fetchPrice();
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -92,21 +85,19 @@ export default function HeroSection() {
           </span>
         </div>
 
-        <div className="flex items-center justify-center lg:justify-start gap-3 mb-8">
-            <span className="h-px w-12 bg-red-500/50 hidden lg:block"></span>
-            <span className="text-red-500 font-medium tracking-widest text-sm uppercase font-heading">Value is enforced by code.</span>
+        <div className="flex flex-col items-center justify-center lg:items-start lg:justify-start gap-2 mb-8">
+            <div className="text-xs sm:text-sm font-semibold tracking-widest text-gray-300 uppercase font-heading">
+              Play. Time. Value.
+            </div>
         </div>
 
         <div className="text-base lg:text-lg text-gray-400 mb-10 max-w-2xl mx-auto lg:mx-0 leading-relaxed font-light tracking-wide bg-[#0A0A0A] border border-white/5 rounded-sm px-4 py-3 relative overflow-hidden group hover:border-red-500/20 transition-colors">
-          <span className="absolute top-2 right-2 text-[10px] font-mono text-gray-500 bg-black/40 px-1.5 py-0.5 rounded-sm">
-             {refreshCountdown}s
-          </span>
           <div className="flex flex-col gap-3">
             <div className="font-sans">
               Bitcoin has 21 Million coins.{" "}
               <span className="font-bold text-white">Block21(B21)</span> has only{" "}
-              <span className="font-mono text-red-500 font-bold">2.1 Million</span>. 
-              100x scarcer. 100% Transparent.
+              <span className="font-mono text-red-500 font-bold">2.1 Million</span>.
+              <span className="block">100X scarcer &amp; 100% Transparent.</span>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-8 pt-2 border-t border-white/5">
                <div className="flex items-center gap-2">
@@ -139,6 +130,16 @@ export default function HeroSection() {
             </Link>
         </div>
 
+        {/* Secondary CTAs (Pitch & Release) */}
+        <div className="flex flex-wrap items-center gap-3 justify-center lg:justify-start relative z-20 mb-5">
+            <Link href="/pitch" className="px-5 py-2 glass-panel hover:bg-white/5 text-gray-300 font-medium tracking-wide text-xs rounded-sm transition-all flex items-center justify-center gap-2 hover:border-white/20 font-sans uppercase">
+               <FileText className="w-4 h-4" /> Pitch Deck
+            </Link>
+            <Link href="/release-policy" className="px-5 py-2 glass-panel hover:bg-white/5 text-gray-300 font-medium tracking-wide text-xs rounded-sm transition-all flex items-center justify-center gap-2 hover:border-white/20 font-sans uppercase">
+               <Info className="w-4 h-4" /> Release Policy
+            </Link>
+        </div>
+
         {/* CTAs */}
         <div className="flex flex-col sm:flex-row items-center gap-5 justify-center lg:justify-start relative z-20">
             <Link href="/market" className="w-full sm:w-auto px-8 py-4 bg-red-600 hover:bg-red-700 text-white font-bold tracking-wide text-base rounded-sm transition-all shadow-none flex items-center justify-center gap-2 font-heading">
@@ -156,10 +157,6 @@ export default function HeroSection() {
             <Link href="/price-discovery" className="w-full sm:w-auto px-8 py-4 glass-panel hover:bg-white/5 text-white font-medium tracking-wider text-sm rounded-sm transition-all flex items-center justify-center gap-2 hover:border-white/20 font-sans">
                 <BarChart3 className="w-5 h-5" />
                 Read price logic
-            </Link>
-            <Link href="/release-policy" className="w-full sm:w-auto px-8 py-4 glass-panel hover:bg-white/5 text-white font-medium tracking-wider text-sm rounded-sm transition-all flex items-center justify-center gap-2 hover:border-white/20 font-sans">
-                <Info className="w-5 h-5" />
-                View release policy
             </Link>
         </div>
 
