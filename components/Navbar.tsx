@@ -9,7 +9,6 @@ import Logo from "./Logo";
 import WalletConnect from "./WalletConnect";
 
 const navItems = [
-  { name: "Game", href: "/game" },
   { name: "Home", href: "/" },
   { name: "Learn", href: "/learn" },
   { name: "Roadmap", href: "/roadmap" },
@@ -17,6 +16,7 @@ const navItems = [
   { name: "Transparency", href: "/transparency" },
   { name: "Pitch Deck", href: "/pitch" },
   { name: "Release Policy", href: "/release-policy" },
+  { name: "Game", href: "/game" },
 ];
 
 export default function Navbar() {
