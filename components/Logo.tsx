@@ -18,7 +18,7 @@ export default function Logo({ className = "", showText = true }: { className?: 
               Block
               <span className="text-[#FF0033] font-sans font-extrabold tabular-nums tracking-normal">21</span>
             </span>
-            <span className="text-[10px] font-mono text-[#525252] font-bold tracking-widest uppercase pl-0.5 group-hover:text-white/50 transition-colors duration-300">
+            <span className="text-[10px] font-mono text-[#525252] font-bold tracking-wide uppercase pl-0.5 group-hover:text-white/50 transition-colors duration-300">
                 Official Standard
             </span>
         </div>

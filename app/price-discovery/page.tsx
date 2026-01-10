@@ -25,19 +25,19 @@ export default function PriceDiscoveryPage() {
     <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Background Effects */}
       <div className="absolute top-0 left-0 w-full h-full bg-[url('/grid.svg')] opacity-10 pointer-events-none" />
-      <div className="absolute top-0 right-1/4 w-96 h-96 bg-gold-500/10 rounded-full blur-[128px] pointer-events-none" />
-      <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-[128px] pointer-events-none" />
+      <div className="absolute top-0 right-1/4 w-96 h-96 bg-red-500/10 rounded-full blur-[128px] pointer-events-none" />
+      <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-red-500/5 rounded-full blur-[128px] pointer-events-none" />
 
       <div className="max-w-5xl mx-auto relative z-10 space-y-16">
         
         {/* Header */}
         <div className="text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-gold-500/30 bg-gold-500/10 text-gold-500 text-sm font-bold uppercase tracking-wider mb-4">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-red-500/30 bg-red-500/10 text-red-500 text-sm font-bold uppercase tracking-wider mb-4">
             <Scale className="w-4 h-4" />
             <span>Economic Reference</span>
           </div>
-          <h1 className="text-3xl md:text-5xl font-heading font-black mb-6 tracking-tight leading-tight">
-            Bitcoin’s Earliest Price — <span className="bg-clip-text text-transparent bg-gradient-to-r from-gold-500 via-white to-gold-500 animate-gradient-x">How Price Discovery Really Works</span>
+          <h1 className="text-3xl md:text-5xl font-heading font-black mb-6 tracking-tight leading-tight text-white">
+            How Price Discovery <span className="text-red-500">Really Works</span>
           </h1>
           <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
             Reference Asset: <span className="text-orange-500 font-bold">Bitcoin</span>
@@ -48,7 +48,7 @@ export default function PriceDiscoveryPage() {
         <LivePriceDisplay />
 
         {/* 1. At Launch (2009): Bitcoin Had No Price */}
-        <div className="glass-panel p-4 md:p-10 border-gold-500/20 relative overflow-hidden">
+        <div className="glass-panel p-4 md:p-10 border-red-500/20 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-8 opacity-5">
                 <History size={180} />
             </div>
@@ -110,7 +110,7 @@ export default function PriceDiscoveryPage() {
 
                 <div className="bg-white/5 border border-white/10 rounded-xl p-6">
                     <h3 className="font-heading font-bold text-white mb-4 flex items-center gap-2">
-                        <Coins className="w-5 h-5 text-gold-500" />
+                        <Coins className="w-5 h-5 text-red-500" />
                         First Real-World Transaction (Pizza Day — May 22, 2010)
                     </h3>
                     <p className="text-gray-400 mb-4 text-sm">Bitcoin’s first real economic valuation occurred when it was used to buy goods:</p>
@@ -123,9 +123,9 @@ export default function PriceDiscoveryPage() {
                             <div className="text-gray-400 text-xs uppercase mb-1">Purchase</div>
                             <div className="text-xl font-bold text-white">2 Pizzas</div>
                         </div>
-                        <div className="bg-black/20 p-4 rounded-lg border border-gold-500/20">
+                        <div className="bg-black/20 p-4 rounded-lg border border-red-500/20">
                             <div className="text-gray-400 text-xs uppercase mb-1">Implied Value</div>
-                            <div className="text-xl font-bold text-gold-500">~$0.0041 per BTC</div>
+                            <div className="text-xl font-bold text-red-500">~$0.0041 per BTC</div>
                         </div>
                     </div>
                     <div className="mt-4 flex items-center gap-2 text-sm text-gray-300 bg-white/5 p-3 rounded-lg">
@@ -164,9 +164,9 @@ export default function PriceDiscoveryPage() {
         </div>
 
         {/* 2. Why Direct Comparisons Require Context */}
-        <div className="glass-panel p-4 md:p-10 border-blue-500/20">
+        <div className="glass-panel p-4 md:p-10 border-red-500/20">
             <h2 className="text-2xl md:text-3xl font-heading font-bold text-white mb-6 flex items-center gap-3">
-                <span className="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-500/20 text-blue-500 text-base md:text-lg font-black shrink-0">2</span>
+                <span className="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full bg-red-500/20 text-red-500 text-base md:text-lg font-black shrink-0">2</span>
                 Why Direct Comparisons Require Context
             </h2>
             
@@ -188,15 +188,15 @@ export default function PriceDiscoveryPage() {
                     </p>
                 </div>
 
-                <div className="bg-blue-500/10 p-6 rounded-xl border border-blue-500/20">
-                    <h3 className="font-heading font-bold text-blue-300 mb-4 flex items-center gap-2">
+                <div className="bg-red-500/10 p-6 rounded-xl border border-red-500/20">
+                    <h3 className="font-heading font-bold text-red-300 mb-4 flex items-center gap-2">
                         <Scale className="w-5 h-5" />
                         Inflation-Adjusted Context (Not a Prediction)
                     </h3>
                     <p className="text-sm text-gray-400 mb-4">
                         When adjusted for USD inflation, currency devaluation, and growth of the digital economy:
                     </p>
-                    <div className="text-center py-4 bg-black/20 rounded-lg border border-blue-500/30 mb-4">
+                    <div className="text-center py-4 bg-black/20 rounded-lg border border-red-500/30 mb-4">
                         <div className="text-gray-400 text-sm mb-1">Bitcoin’s earliest experimental value roughly maps to:</div>
                         <div className="text-2xl md:text-3xl font-heading font-black text-white">~$0.005 – $0.008</div>
                         <div className="text-xs text-gray-500 mt-1">in today’s terms</div>
@@ -209,9 +209,9 @@ export default function PriceDiscoveryPage() {
         </div>
 
         {/* 3. How This Relates to Block21 (B21) */}
-        <div className="glass-panel p-6 md:p-10 border-gold-500/20 bg-gradient-to-b from-black/40 to-gold-500/5">
+        <div className="glass-panel p-6 md:p-10 border-red-500/20 bg-gradient-to-b from-black/40 to-red-500/5">
             <h2 className="text-2xl md:text-3xl font-heading font-bold text-white mb-8 flex items-center gap-3">
-                <span className="flex items-center justify-center w-10 h-10 rounded-full bg-gold-500/20 text-gold-500 text-lg font-black shrink-0">3</span>
+                <span className="flex items-center justify-center w-10 h-10 rounded-full bg-red-500/20 text-red-500 text-lg font-black shrink-0">3</span>
                 How This Relates to Block21 (B21)
             </h2>
 
@@ -223,7 +223,7 @@ export default function PriceDiscoveryPage() {
                                 <tr>
                                     <th className="p-3 text-gray-400 font-medium">Factor</th>
                                     <th className="p-3 text-gray-400 font-medium">Bitcoin (2009-10)</th>
-                                    <th className="p-3 text-gold-500 font-bold">Block21 (Today)</th>
+                                    <th className="p-3 text-red-500 font-bold">Block21 (Today)</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
@@ -258,20 +258,20 @@ export default function PriceDiscoveryPage() {
                 </div>
 
                 <div className="relative">
-                    <div className="absolute inset-0 bg-gold-500/20 blur-3xl rounded-full opacity-20 animate-pulse" />
-                    <div className="relative glass-card p-8 border-gold-500/30 text-center space-y-4">
+                    <div className="absolute inset-0 bg-red-500/20 blur-3xl rounded-full opacity-20 animate-pulse" />
+                    <div className="relative glass-card p-8 border-red-500/30 text-center space-y-4">
                         <div className="text-gray-400 uppercase tracking-widest text-sm font-bold">Starting Reference Price</div>
-                        <div className="text-5xl md:text-6xl font-heading font-black text-gold-500">
+                        <div className="text-5xl md:text-6xl font-heading font-black text-red-500">
                             $0.006
                         </div>
                         <div className="text-sm text-gray-500">per B21</div>
-                        <div className="p-4 bg-gold-500/10 border border-gold-500/20 rounded-lg text-sm text-gray-300 font-medium mt-4 text-left space-y-2">
+                        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-gray-300 font-medium mt-4 text-left space-y-2">
                             <p className="flex items-start gap-2">
-                                <CheckCircle2 className="w-4 h-4 text-gold-500 mt-0.5 shrink-0" />
+                                <CheckCircle2 className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
                                 <span>Placed within Bitcoin’s inflation-adjusted early value range</span>
                             </p>
                             <p className="flex items-start gap-2">
-                                <CheckCircle2 className="w-4 h-4 text-gold-500 mt-0.5 shrink-0" />
+                                <CheckCircle2 className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
                                 <span>Chosen for clarity and transparency, not prediction</span>
                             </p>
                         </div>
@@ -301,8 +301,8 @@ export default function PriceDiscoveryPage() {
                             <td className="p-4 border-b border-white/5 font-bold text-orange-400">Bitcoin</td>
                             <td className="p-4 border-b border-white/5 text-white">21,000,000 BTC</td>
                         </tr>
-                        <tr className="bg-gold-500/10">
-                            <td className="p-4 font-bold text-gold-500">Block21 (B21)</td>
+                        <tr className="bg-red-500/10">
+                            <td className="p-4 font-bold text-red-500">Block21 (B21)</td>
                             <td className="p-4 font-bold text-white">2,100,000 B21</td>
                         </tr>
                     </tbody>
@@ -334,85 +334,34 @@ export default function PriceDiscoveryPage() {
                         <tr className="bg-white/5 border-b border-white/10">
                             <th className="p-4 text-gray-400 font-medium">Metric</th>
                             <th className="p-4 text-gray-400 font-medium">Bitcoin (Early Era)</th>
-                            <th className="p-4 text-gold-500 font-bold">Block21 (Launch)</th>
+                            <th className="p-4 text-red-500 font-bold">Block21 (Launch)</th>
                         </tr>
                     </thead>
-                    <tbody className="text-gray-300">
+                    <tbody className="divide-y divide-white/5">
                         <tr>
-                            <td className="p-4 border border-white/10 font-medium text-white">Launch price</td>
-                            <td className="p-4 border border-white/10">None</td>
-                            <td className="p-4 border border-white/10 text-white">Reference declared</td>
+                            <td className="p-4 text-gray-400">Value Origin</td>
+                            <td className="p-4 text-white">Zero (then accidental)</td>
+                            <td className="p-4 text-white">Calculated Reference</td>
                         </tr>
                         <tr>
-                            <td className="p-4 border border-white/10 font-medium text-white">First assignable value</td>
-                            <td className="p-4 border border-white/10">~$0.00076</td>
-                            <td className="p-4 border border-white/10 text-gray-500">—</td>
+                            <td className="p-4 text-gray-400">Starting Price</td>
+                            <td className="p-4 text-white">None (then &lt; $0.01)</td>
+                            <td className="p-4 text-white">$0.006 (Fixed)</td>
                         </tr>
                         <tr>
-                            <td className="p-4 border border-white/10 font-medium text-white">First utility value</td>
-                            <td className="p-4 border border-white/10">~$0.0041</td>
-                            <td className="p-4 border border-white/10 text-gray-500">—</td>
-                        </tr>
-                        <tr className="bg-gold-500/5">
-                            <td className="p-4 border border-white/10 font-medium text-white">Inflation-adjusted context</td>
-                            <td className="p-4 border border-white/10">&lt;$0.01</td>
-                            <td className="p-4 border border-white/10 font-bold text-gold-500">~$0.006</td>
-                        </tr>
-                        <tr>
-                            <td className="p-4 border border-white/10 font-medium text-white">Total supply</td>
-                            <td className="p-4 border border-white/10">21M</td>
-                            <td className="p-4 border border-white/10 font-bold text-white">2.1M</td>
-                        </tr>
-                        <tr>
-                            <td className="p-4 border border-white/10 font-medium text-white">Value formation</td>
-                            <td className="p-4 border border-white/10">Discovered over time</td>
-                            <td className="p-4 border border-white/10 text-white">Discovered over time</td>
+                            <td className="p-4 text-gray-400">Goal</td>
+                            <td className="p-4 text-white">Tech Experiment</td>
+                            <td className="p-4 text-white">Value Preservation</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
-            
-            <div className="mt-8 p-6 bg-gradient-to-r from-blue-900/20 to-black rounded-xl border border-blue-500/20">
-                <h3 className="text-xl font-heading font-bold text-white mb-3">Plain-English Explanation</h3>
-                <div className="space-y-4 text-gray-300">
-                    <p className="leading-relaxed">
-                        <span className="text-white font-bold">Bitcoin did not start cheap — it started without a price.</span><br/>
-                        Its value emerged slowly through experimentation, use, and adoption.
-                    </p>
-                    <p className="leading-relaxed">
-                        <span className="text-gold-500 font-bold">Block21 begins with a transparent reference price of $0.006,</span><br/>
-                        aligned with historical context and fixed scarcity, while leaving all future value discovery entirely to the open market.
-                    </p>
-                </div>
-            </div>
 
-            <div className="mt-8 p-6 bg-white/5 rounded-xl border border-white/10 flex items-start gap-4">
-                <AlertTriangle className="w-6 h-6 text-gold-500 shrink-0 mt-1" />
-                <div>
-                    <h4 className="text-white font-bold mb-1">Transparency Disclaimer (Required)</h4>
-                    <p className="text-sm text-gray-400 leading-relaxed">
-                        $0.006 is a reference starting price, not a guarantee or prediction. Market value will depend entirely on adoption, liquidity, and demand.
-                    </p>
-                </div>
-            </div>
-        </div>
-
-        {/* Short Caption */}
-        <div className="text-center">
-            <div className="inline-block p-4 bg-white/5 rounded-lg border border-white/10 mb-8">
-                <p className="text-gray-400 italic font-medium">
-                    “Bitcoin earned value over time. Block21 starts transparently and lets the market decide.”
-                </p>
-            </div>
-            
-            <div>
-                <Link 
-                    href="/usd-value-check" 
-                    className="inline-flex items-center gap-2 text-gold-500 hover:text-white transition-colors group"
-                >
-                    <span className="border-b border-transparent group-hover:border-white">Read: USD Value Over Time — A Reality Check</span>
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </Link>
+            <div className="mt-8 text-center">
+                 <div className="inline-flex items-center gap-2 text-red-200 bg-red-500/10 px-4 py-2 rounded-full border border-red-500/20 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-red-500" />
+                    <span>Price Discovery is not magic — it is the market finding truth.</span>
+                 </div>
             </div>
         </div>
 

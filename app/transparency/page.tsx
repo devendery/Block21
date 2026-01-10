@@ -34,11 +34,18 @@ const WALLETS = [
     status: "Active"
   },
   {
-    name: "Liquidity (DEX)",
+    name: "Liquidity Future (DEX)",
     address: "0x29804F6Bd1c45f0B5982C1b9973FcfF574E39529",
     purpose: "Decentralized exchange liquidity provisioning",
     usageScope: "Used only to add DEX liquidity. Liquidity is deployed gradually and never used for operational or personal expenses.",
     status: "Locked"
+  },
+  {
+    name: "Deployer",
+    address: "0x7A085FC48397bC0020F9e3979F2061B53F87eC1c",
+    purpose: "Contract deployment and management",
+    usageScope: "Primary address for deploying contracts and initial configuration.",
+    status: "Active"
   },
   {
     name: "Ecosystem & Rewards",
@@ -48,7 +55,7 @@ const WALLETS = [
     status: "Active"
   },
   {
-    name: "Testing Wallet",
+    name: "QC Wallet",
     address: "0xBBA9BEEB5c817354D1B988Ddd72C4B927B2aB96a",
     purpose: "Contract testing, audits, verification",
     usageScope: "Holds minimal balances. Not involved in market activity.",
@@ -92,7 +99,7 @@ export default function TransparencyPage() {
           {/* Heading */}
           <div role="heading" aria-level={1} className="text-4xl lg:text-6xl font-black tracking-tight text-white mb-8 leading-tight font-heading">
             <span className="block text-gray-400 text-2xl lg:text-3xl mb-3 font-bold tracking-normal">Don't Trust. Verify.</span>
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-amber-500 via-amber-200 to-amber-500 drop-shadow-[0_2px_10px_rgba(201,164,76,0.3)]">
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-red-500 via-white to-red-500 drop-shadow-[0_2px_10px_rgba(239,68,68,0.3)]">
               100% On-Chain Transparency
             </span>
           </div>
@@ -100,7 +107,7 @@ export default function TransparencyPage() {
           <div className="mb-8">
              <Link 
                 href="/usd-value-check" 
-                className="inline-flex items-center gap-2 text-brand-gold hover:text-white transition-colors border-b border-brand-gold/30 hover:border-white pb-0.5"
+                className="inline-flex items-center gap-2 text-red-500 hover:text-white transition-colors border-b border-red-500/30 hover:border-white pb-0.5"
              >
                 Read: USD Value Over Time — A Reality Check <ArrowRight className="w-4 h-4" />
              </Link>
@@ -114,16 +121,16 @@ export default function TransparencyPage() {
 
         {/* Wallet Table */}
         <div className="glass-card rounded-2xl overflow-hidden mb-16 shadow-2xl relative">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-gold-500/50 to-transparent" />
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
           <div className="p-4 md:p-6 border-b border-white/10 bg-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 backdrop-blur-md">
             <div className="flex flex-col gap-1">
               <h2 className="text-2xl font-heading font-bold text-white flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-gold-500/10 text-gold-500">
+                <div className="p-2 rounded-lg bg-red-500/10 text-red-500">
                   <Wallet className="w-6 h-6" />
                 </div>
                 Official Wallets
               </h2>
-              <p className="text-xs md:text-sm text-gold-500/80 font-mono uppercase tracking-wider pl-14">
+              <p className="text-xs md:text-sm text-red-500/80 font-mono uppercase tracking-wider pl-14">
                 Transparent · Purpose-Driven · On-Chain Verifiable
               </p>
             </div>
@@ -131,7 +138,7 @@ export default function TransparencyPage() {
               href={`https://polygonscan.com/token/${B21_CONTRACT_ADDRESS}`} 
               target="_blank" 
               rel="noopener noreferrer"
-              className="text-sm text-gold-500 hover:text-white transition-colors flex items-center gap-2 font-medium px-4 py-2 rounded-lg hover:bg-white/5 border border-transparent hover:border-white/10"
+              className="text-sm text-red-500 hover:text-white transition-colors flex items-center gap-2 font-medium px-4 py-2 rounded-lg hover:bg-white/5 border border-transparent hover:border-white/10"
             >
               View on Polygonscan <Activity className="w-4 h-4" />
             </a>
@@ -141,11 +148,11 @@ export default function TransparencyPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-white/5 border-b border-white/10">
-                  <th className="p-3 md:p-4 text-xs font-heading font-bold text-gold-500/80 tracking-wider">Wallet Name</th>
-                  <th className="p-3 md:p-4 text-xs font-heading font-bold text-gold-500/80 tracking-wider">Wallet Address</th>
-                  <th className="p-3 md:p-4 text-xs font-heading font-bold text-gold-500/80 tracking-wider">Purpose</th>
-                  <th className="p-3 md:p-4 text-xs font-heading font-bold text-gold-500/80 tracking-wider">Usage Scope</th>
-                  <th className="p-3 md:p-4 text-xs font-heading font-bold text-gold-500/80 tracking-wider">Status</th>
+                  <th className="p-3 md:p-4 text-xs font-heading font-bold text-red-500/80 tracking-wider">Wallet Name</th>
+                  <th className="p-3 md:p-4 text-xs font-heading font-bold text-red-500/80 tracking-wider">Wallet Address</th>
+                  <th className="p-3 md:p-4 text-xs font-heading font-bold text-red-500/80 tracking-wider">Purpose</th>
+                  <th className="p-3 md:p-4 text-xs font-heading font-bold text-red-500/80 tracking-wider">Usage Scope</th>
+                  <th className="p-3 md:p-4 text-xs font-heading font-bold text-red-500/80 tracking-wider">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -156,7 +163,7 @@ export default function TransparencyPage() {
                         href={`https://polygonscan.com/address/${wallet.address}`} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="font-bold text-white group-hover:text-gold-500 transition-colors hover:underline decoration-gold-500/50 underline-offset-4"
+                        className="font-bold text-white group-hover:text-red-500 transition-colors hover:underline decoration-red-500/50 underline-offset-4"
                       >
                         {wallet.name}
                       </a>
@@ -169,7 +176,7 @@ export default function TransparencyPage() {
                           href={`https://polygonscan.com/address/${wallet.address}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="hover:text-gold-500 transition-colors hover:underline decoration-gold-500/50"
+                          className="hover:text-red-500 transition-colors hover:underline decoration-red-500/50"
                         >
                           {wallet.address}
                         </a>
@@ -195,10 +202,10 @@ export default function TransparencyPage() {
 
         {/* Supply Allocation Overview */}
         <div className="glass-card rounded-2xl overflow-hidden mb-16 shadow-2xl relative">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-gold-500/5 rounded-full blur-[80px] pointer-events-none" />
+            <div className="absolute top-0 right-0 w-64 h-64 bg-red-500/5 rounded-full blur-[80px] pointer-events-none" />
             <div className="p-4 md:p-6 border-b border-white/10 bg-white/5 backdrop-blur-md">
                 <h2 className="text-2xl font-heading font-bold text-white flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-gold-500/10 text-gold-500">
+                    <div className="p-2 rounded-lg bg-red-500/10 text-red-500">
                         <PieChart className="w-6 h-6" />
                     </div>
                     Supply Allocation Overview
@@ -209,24 +216,24 @@ export default function TransparencyPage() {
                 <table className="w-full text-left">
                     <thead>
                         <tr className="bg-white/5 border-b border-white/10">
-                            <th className="p-3 md:p-4 text-gold-500/80 font-heading font-medium uppercase text-xs tracking-wider">Category</th>
-                            <th className="p-3 md:p-4 text-gold-500/80 font-heading font-medium uppercase text-xs tracking-wider">Amount (B21)</th>
-                            <th className="p-3 md:p-4 text-gold-500/80 font-heading font-medium uppercase text-xs tracking-wider">% of Supply</th>
-                            <th className="p-3 md:p-4 text-gold-500/80 font-heading font-medium uppercase text-xs tracking-wider">Purpose</th>
+                            <th className="p-3 md:p-4 text-red-500/80 font-heading font-medium uppercase text-xs tracking-wider">Category</th>
+                            <th className="p-3 md:p-4 text-red-500/80 font-heading font-medium uppercase text-xs tracking-wider">Amount (B21)</th>
+                            <th className="p-3 md:p-4 text-red-500/80 font-heading font-medium uppercase text-xs tracking-wider">% of Supply</th>
+                            <th className="p-3 md:p-4 text-red-500/80 font-heading font-medium uppercase text-xs tracking-wider">Purpose</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
                         {ALLOCATION.map((item, i) => (
                             <tr key={i} className="hover:bg-white/5 transition-colors group">
-                                <td className="p-3 md:p-4 text-white font-medium group-hover:text-gold-500 transition-colors">
+                                <td className="p-3 md:p-4 text-white font-medium group-hover:text-red-500 transition-colors">
                                     {item.category.includes("**") ? <strong>{item.category.replace(/\*\*/g, '')}</strong> : item.category}
                                 </td>
                                 <td className="p-3 md:p-4 text-gray-300 font-mono">{item.amount}</td>
-                                <td className="p-3 md:p-4 text-gold-500 font-bold">{item.percent}</td>
+                                <td className="p-3 md:p-4 text-red-500 font-bold">{item.percent}</td>
                                 <td className="p-3 md:p-4 text-gray-400 text-sm">{item.purpose}</td>
                             </tr>
                         ))}
-                         <tr className="bg-gold-500/10 border-t-2 border-gold-500/20">
+                         <tr className="bg-red-500/10 border-t-2 border-red-500/20">
                             <td className="p-3 md:p-4 text-white font-black uppercase tracking-wider">Total</td>
                             <td className="p-3 md:p-4 text-white font-black font-mono">2,100,000</td>
                             <td className="p-3 md:p-4 text-white font-black">100%</td>
@@ -266,9 +273,9 @@ export default function TransparencyPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-white/5 border-b border-white/10">
-                  <th className="p-3 md:p-4 text-xs font-heading font-bold text-gold-500/80 tracking-wider">Phase</th>
-                  <th className="p-3 md:p-4 text-xs font-heading font-bold text-gold-500/80 tracking-wider">Fee Change</th>
-                  <th className="p-3 md:p-4 text-xs font-heading font-bold text-gold-500/80 tracking-wider">Description</th>
+                  <th className="p-3 md:p-4 text-xs font-heading font-bold text-red-500/80 tracking-wider">Phase</th>
+                  <th className="p-3 md:p-4 text-xs font-heading font-bold text-red-500/80 tracking-wider">Fee Change</th>
+                  <th className="p-3 md:p-4 text-xs font-heading font-bold text-red-500/80 tracking-wider">Description</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">

@@ -65,7 +65,7 @@ export default function InstitutionalB21Logo({
     switch (variant) {
       case "v5": // The "Crystal Monolith" (High Clarity / Attractive)
         return (
-          <g transform="translate(256, 256)">
+          <g transform="translate(256, 256) scale(1.15)">
              {/* 1. The Shield Base (Hexagonal Diamond) */}
              <path 
                d="M0 -210 L180 -105 L180 105 L0 210 L-180 105 L-180 -105 Z" 
@@ -110,7 +110,7 @@ export default function InstitutionalB21Logo({
 
       case "v1": // The Sovereign (Refined for Clarity)
         return (
-          <g transform="translate(128, 128) scale(0.5)">
+          <g transform="translate(2, -26) scale(1.1)">
              <path d="M100 50 L200 50 L200 462 L100 462 L50 256 Z" fill={c.primary} stroke={c.bg} strokeWidth="4" />
              <path d="M210 50 L412 150 L350 250 L210 250 Z" fill={c.secondary} stroke={c.bg} strokeWidth="4" />
              <path d="M210 262 L350 262 L412 362 L210 462 Z" fill={c.secondary} stroke={c.bg} strokeWidth="4" />
@@ -179,11 +179,11 @@ export default function InstitutionalB21Logo({
             </filter>
         </defs>
 
-        {/* Background */}
-        <circle cx="256" cy="256" r="256" fill={c.bg} />
+        {/* Background - Removed Circle */}
+        {/* <circle cx="256" cy="256" r="256" fill={c.bg} /> */}
         
-        {/* Rim Light for V5/Obsidian */}
-        <circle cx="256" cy="256" r="252" stroke={c.accent} strokeWidth={variant === 'v5' ? 4 : 2} opacity={theme === 'obsidian' ? 0.6 : 0.3} filter={theme === 'obsidian' ? 'url(#glow)' : undefined} />
+        {/* Rim Light for V5/Obsidian - Removed Circle */}
+        {/* <circle cx="256" cy="256" r="252" stroke={c.accent} strokeWidth={variant === 'v5' ? 4 : 2} opacity={theme === 'obsidian' ? 0.6 : 0.3} filter={theme === 'obsidian' ? 'url(#glow)' : undefined} /> */}
         
         {renderContent()}
 

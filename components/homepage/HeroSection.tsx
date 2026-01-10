@@ -146,15 +146,11 @@ export default function HeroSection() {
                 <TrendingUp className="w-5 h-5" />
                 Explore B21
             </Link>
-            <Link href="/market#how-to-get-b21" className="w-full sm:w-auto px-8 py-4 glass-panel hover:bg-white/5 text-white font-medium tracking-wider text-sm rounded-sm transition-all flex items-center justify-center gap-2 hover:border-white/20 font-sans">
+            <Link href="/market#how-to-get-b21" className="w-full sm:w-auto px-8 py-4 bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 hover:border-green-500/50 hover:text-green-300 font-medium tracking-wider text-sm rounded-sm transition-all flex items-center justify-center gap-2 font-sans backdrop-blur-sm">
                 <ArrowRight className="w-5 h-5" />
                 How to get B21
             </Link>
-            <Link href="/learn" className="w-full sm:w-auto px-8 py-4 glass-panel hover:bg-white/5 text-white font-medium tracking-wider text-sm rounded-sm transition-all flex items-center justify-center gap-2 hover:border-white/20 transform hover:-translate-y-1 font-sans">
-                <BookOpen className="w-5 h-5" />
-                Learn more
-            </Link>
-            <Link href="/price-discovery" className="w-full sm:w-auto px-8 py-4 glass-panel hover:bg-white/5 text-white font-medium tracking-wider text-sm rounded-sm transition-all flex items-center justify-center gap-2 hover:border-white/20 font-sans">
+            <Link href="/price-discovery" className="w-full sm:w-auto px-8 py-4 bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 hover:border-orange-500/50 hover:text-orange-300 font-medium tracking-wider text-sm rounded-sm transition-all flex items-center justify-center gap-2 font-sans backdrop-blur-sm">
                 <BarChart3 className="w-5 h-5" />
                 Read price logic
             </Link>

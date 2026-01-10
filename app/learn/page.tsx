@@ -60,9 +60,9 @@ export default function LearnPage() {
                     <span className="md:hidden inline-flex items-center font-heading">BTC</span>
                 </div>
                 <div className="col-span-4 md:col-span-5 font-bold text-red-500 text-center text-xs tracking-wider flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center text-[10px] font-bold">$</span> 
-                    <span className="hidden md:inline-flex items-center gap-1 font-heading">Block21 <InstitutionalB21Logo size={24} variant="v1" theme="obsidian" /></span>
-                    <span className="md:hidden inline-flex items-center font-heading"><InstitutionalB21Logo size={24} variant="v1" theme="obsidian" /></span>
+                    <InstitutionalB21Logo size={24} variant="v1" theme="obsidian" />
+                    <span className="hidden md:inline-flex items-center gap-1 font-heading">Block 21 (B21)</span>
+                    <span className="md:hidden inline-flex items-center font-heading">B21</span>
                 </div>
             </div>
 

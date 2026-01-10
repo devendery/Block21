@@ -117,7 +117,7 @@ export default function LivePriceDisplay() {
       </div>
 
       {/* Block21 Live Price */}
-      <div className="glass-panel p-6 border-blue-500/30 bg-blue-500/5 relative overflow-hidden group">
+      <div className="glass-panel p-6 border-red-500/30 bg-red-500/5 relative overflow-hidden group">
         <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity duration-500">
           <RefreshCw size={120} />
         </div>
@@ -125,7 +125,7 @@ export default function LivePriceDisplay() {
         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
           <div>
             <h2 className="text-2xl font-heading font-bold text-white mb-2 flex items-center justify-center md:justify-start gap-2">
-              <span className="text-blue-500 font-black text-xl">B21</span>
+              <span className="text-red-500 font-black text-xl">B21</span>
               Block21 Live Price
             </h2>
             <div className="text-4xl md:text-5xl font-black text-white tracking-tight mb-1">
@@ -137,7 +137,7 @@ export default function LivePriceDisplay() {
                 href={`https://polygonscan.com/token/${B21_CONTRACT_ADDRESS}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors ml-1"
+                className="inline-flex items-center gap-1 text-red-400 hover:text-red-300 transition-colors ml-1"
               >
                 {B21_CONTRACT_ADDRESS.slice(0, 6)}...{B21_CONTRACT_ADDRESS.slice(-4)}
                 <ExternalLink className="w-3 h-3" />

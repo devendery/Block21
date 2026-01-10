@@ -27,9 +27,9 @@ export default function Navbar() {
     <nav className="border-b border-white/10 sticky top-0 z-50 bg-black/60 backdrop-blur-md overflow-hidden relative">
 
       <div className="w-full px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="flex items-center justify-between h-24">
+        <div className="flex items-center justify-between h-28">
           <div className="flex items-center">
-            <Link href="/" aria-label="Go to homepage" className="hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-primary rounded-md">
+            <Link href="/" aria-label="Go to homepage" className="hover:opacity-80 transition-opacity focus:outline-none rounded-md">
               <Logo className="h-auto w-auto scale-110" />
             </Link>
           </div>
@@ -40,7 +40,7 @@ export default function Navbar() {
                   key={item.name}
                   href={item.href}
                   className={cn(
-                    "px-3 py-2 rounded-md text-base font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary whitespace-nowrap",
+                    "px-3 py-2 rounded-md text-base font-medium transition-colors focus:outline-none whitespace-nowrap",
                     pathname === item.href
                       ? "text-primary bg-gray-900"
                       : "text-gray-300 hover:text-white hover:bg-gray-800"
@@ -57,7 +57,7 @@ export default function Navbar() {
           <div className="-mr-2 flex md:hidden">
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none"
             >
               {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
@@ -73,7 +73,7 @@ export default function Navbar() {
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  "block px-3 py-2 rounded-md text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary",
+                  "block px-3 py-2 rounded-md text-base font-medium focus:outline-none",
                   pathname === item.href
                     ? "text-primary bg-gray-900"
                     : "text-gray-300 hover:text-white hover:bg-gray-700"
