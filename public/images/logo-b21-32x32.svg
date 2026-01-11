@@ -1,12 +1,4 @@
-<svg width="32" height="32" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background -->
-  <circle cx="256" cy="256" r="256" fill="#080808" />
-  
-  <!-- Rim Light (Thicker for small size visibility) -->
-  <circle cx="256" cy="256" r="240" stroke="#FF3355" stroke-width="40" opacity="0.8" />
-  
-  <!-- Content: Sovereign V1 -->
-  <g transform="translate(128, 128) scale(0.5)">
+<svg width="32" height="32" viewBox="6 31 450 450" fill="none" xmlns="http://www.w3.org/2000/svg">
      <!-- Primary Shapes -->
      <path d="M100 50 L200 50 L200 462 L100 462 L50 256 Z" fill="#525252" stroke="#080808" stroke-width="32" />
      <path d="M210 50 L412 150 L350 250 L210 250 Z" fill="#262626" stroke="#080808" stroke-width="32" />
@@ -31,5 +23,4 @@
          stroke-width="16"
        />
      </g>
-  </g>
 </svg>
