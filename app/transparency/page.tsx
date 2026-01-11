@@ -169,18 +169,14 @@ export default function TransparencyPage() {
                       </a>
                     </td>
                     <td className="p-3 md:p-4 text-xs font-mono text-gray-400 break-all min-w-[120px]">
-                      {wallet.name.includes("Liquidity") ? (
-                        <span className="text-gray-500 italic">Contract Managed</span>
-                      ) : (
-                        <a 
-                          href={`https://polygonscan.com/address/${wallet.address}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:text-red-500 transition-colors hover:underline decoration-red-500/50"
-                        >
-                          {wallet.address}
-                        </a>
-                      )}
+                      <a 
+                        href={`https://polygonscan.com/address/${wallet.address}`}
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="hover:text-red-500 transition-colors hover:underline decoration-red-500/50"
+                      >
+                        {wallet.address}
+                      </a>
                     </td>
                     <td className="p-3 md:p-4 text-sm text-gray-300 max-w-xs">{wallet.purpose}</td>
                     <td className="p-3 md:p-4 text-sm text-gray-400 max-w-md">{wallet.usageScope}</td>
