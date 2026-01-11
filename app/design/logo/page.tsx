@@ -163,6 +163,37 @@ export default function LogoShowcasePage() {
                 <span>Tagline: #525252 (Grey)</span>
             </div>
           </div>
+
+          {/* Polygonscan / Token Icon (32x32) */}
+          <div className="p-8 bg-slate-900/30 border border-slate-800 rounded-2xl flex flex-col md:flex-row items-center gap-12 mb-8">
+            <div className="flex flex-col items-center gap-4">
+                <div className="w-32 h-32 flex items-center justify-center bg-[#080808] border border-white/10 rounded-lg">
+                    {/* Displaying at 4x scale for preview */}
+                    <img src="/images/logo-b21-32x32.svg" alt="Token Icon Preview" className="w-32 h-32" style={{ imageRendering: 'pixelated' }} />
+                </div>
+                <span className="text-xs text-slate-500 font-mono">Preview (4x Zoom)</span>
+            </div>
+            
+            <div className="flex flex-col items-center gap-4">
+                <div className="w-8 h-8 bg-[#080808]">
+                    <img src="/images/logo-b21-32x32.svg" alt="Token Icon 32x32" width={32} height={32} />
+                </div>
+                <span className="text-xs text-slate-500 font-mono">Actual Size (32x32)</span>
+            </div>
+
+            <div className="flex-1 space-y-4 text-center md:text-left">
+                <h3 className="text-white font-bold">Token Icon (Polygonscan)</h3>
+                <p className="text-slate-400 text-sm">
+                    Optimized 32x32 SVG for block explorers and wallet icons. 
+                    Features thicker stroke widths for visibility at small sizes.
+                </p>
+                <div className="p-3 bg-black/50 rounded border border-white/5 font-mono text-xs text-red-400 break-all">
+                    https://b21-git-main-yourusername.vercel.app/images/logo-b21-32x32.svg
+                    <br/>
+                    <span className="text-slate-600">(Replace domain with your actual deployment URL)</span>
+                </div>
+            </div>
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             
