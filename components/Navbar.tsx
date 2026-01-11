@@ -14,6 +14,7 @@ const navItems = [
   { name: "Roadmap", href: "/roadmap" },
   { name: "Tokenomics", href: "/tokenomics" },
   { name: "Transparency", href: "/transparency" },
+  { name: "Whitepaper", href: "/whitepaper" },
   { name: "Pitch Deck", href: "/pitch" },
   { name: "Release Policy", href: "/release-policy" },
   { name: "Game", href: "/game" },

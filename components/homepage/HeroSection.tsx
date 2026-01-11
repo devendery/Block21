@@ -132,8 +132,11 @@ export default function HeroSection() {
 
         {/* Secondary CTAs (Pitch & Release) */}
         <div className="flex flex-wrap items-center gap-3 justify-center lg:justify-start relative z-20 mb-5">
+            <Link href="/whitepaper" className="px-5 py-2 glass-panel hover:bg-white/5 text-gray-300 font-medium tracking-wide text-xs rounded-sm transition-all flex items-center justify-center gap-2 hover:border-white/20 font-sans uppercase">
+               <FileText className="w-4 h-4" /> Whitepaper
+            </Link>
             <Link href="/pitch" className="px-5 py-2 glass-panel hover:bg-white/5 text-gray-300 font-medium tracking-wide text-xs rounded-sm transition-all flex items-center justify-center gap-2 hover:border-white/20 font-sans uppercase">
-               <FileText className="w-4 h-4" /> Pitch Deck
+               <BarChart3 className="w-4 h-4" /> Pitch Deck
             </Link>
             <Link href="/release-policy" className="px-5 py-2 glass-panel hover:bg-white/5 text-gray-300 font-medium tracking-wide text-xs rounded-sm transition-all flex items-center justify-center gap-2 hover:border-white/20 font-sans uppercase">
                <Info className="w-4 h-4" /> Release Policy
