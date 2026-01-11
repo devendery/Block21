@@ -16,7 +16,6 @@ const navItems = [
   { name: "Transparency", href: "/transparency" },
   { name: "Whitepaper", href: "/whitepaper" },
   { name: "Pitch Deck", href: "/pitch" },
-  { name: "Release Policy", href: "/release-policy" },
   { name: "Game", href: "/game" },
 ];
 

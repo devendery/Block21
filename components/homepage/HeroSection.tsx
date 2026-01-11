@@ -77,11 +77,14 @@ export default function HeroSection() {
         </div>
 
         <div role="heading" aria-level={1} className="mb-6">
-          <span className="block text-4xl lg:text-6xl font-bold tracking-tight text-white mb-3 font-heading">
-            Money Prints Infinite.
+          <span className="block text-5xl lg:text-7xl font-black tracking-tight text-white mb-2 font-heading whitespace-nowrap">
+            Money Prints Infinite
           </span>
-          <span className="block text-4xl lg:text-6xl font-light text-red-600 tracking-wide font-heading">
-            Absolute Scarcity.
+          <span className="block text-3xl lg:text-5xl font-bold text-red-600 tracking-wide font-heading mb-2">
+            Absolute Scarcity
+          </span>
+          <span className="block text-2xl lg:text-4xl font-medium text-white tracking-wide font-heading">
+            Price Discovery
           </span>
         </div>
 
