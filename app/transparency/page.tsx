@@ -249,7 +249,6 @@ export default function TransparencyPage() {
             </div>
         </div>
 
-        {/* Progressive Fee Reduction */}
         <div className="glass-card rounded-2xl overflow-hidden mb-16 shadow-2xl relative">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-green-500/50 to-transparent" />
           <div className="p-4 md:p-6 border-b border-white/10 bg-white/5 backdrop-blur-md">
@@ -259,10 +258,38 @@ export default function TransparencyPage() {
               </div>
               Progressive Fee Reduction
             </h2>
-            <p className="text-sm md:text-base text-gray-300 leading-relaxed max-w-3xl">
+            <p className="text-sm md:text-base text-gray-300 leading-relaxed max-w-3xl mb-4">
               Block21 implements a progressive fee reduction model inspired by Bitcoin’s halving mechanism. 
               Transaction fees decrease over time according to predefined rules, rewarding long-term participation and reducing friction as the ecosystem matures.
             </p>
+            <div className="grid md:grid-cols-2 gap-6 mt-4">
+              <div className="glass-panel rounded-xl p-4 border border-green-500/20 bg-green-500/5">
+                <h3 className="text-lg font-heading font-bold text-white mb-2">Strict Limitations</h3>
+                <p className="text-sm text-gray-300">
+                  The contract is immutable regarding supply. No one can ever mint more B21.
+                </p>
+              </div>
+              <div className="glass-panel rounded-xl p-4 border border-blue-500/20 bg-blue-500/5">
+                <h3 className="text-lg font-heading font-bold text-white mb-2">Halving-style Fee Reduction</h3>
+                <p className="text-sm text-gray-300 mb-3">
+                  Fees are programmed to reduce gradually, similar to Bitcoin halving events, incentivizing long-term holding.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                  <div className="bg-black/40 rounded-lg p-3 border border-white/5">
+                    <div className="text-gray-400">Year 1 reduction</div>
+                    <div className="text-white font-bold">50% Decrease</div>
+                  </div>
+                  <div className="bg-black/40 rounded-lg p-3 border border-white/5">
+                    <div className="text-gray-400">Year 2 reduction</div>
+                    <div className="text-white font-bold">Additional 50%</div>
+                  </div>
+                  <div className="bg-black/40 rounded-lg p-3 border border-white/5">
+                    <div className="text-gray-400">Long term trend</div>
+                    <div className="text-white font-bold">Gradual decline to 0.17%</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           
           <div className="overflow-x-auto">

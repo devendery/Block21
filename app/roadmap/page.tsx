@@ -18,7 +18,7 @@ const PHASES = [
     border: "border-green-500/50",
     bg: "bg-green-500/10",
     items: [
-      "Fixed supply: 2,100,000 B21",
+      "Fixed supply finalized",
       "Deployed on Polygon",
       "Liquidity added on QuickSwap",
       "No mint, no burn, no rug logic"

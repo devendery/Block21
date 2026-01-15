@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { ArrowUpRight, TrendingUp, TrendingDown, Activity, DollarSign, Check, ShieldCheck, ArrowRight } from 'lucide-react';
 import { B21_CONTRACT_ADDRESS } from '@/lib/utils';
 import Link from 'next/link';
+import { getMarketData, MarketData } from '@/lib/api';
 
-// Types for API responses
 interface CoinData {
   bitcoin: { usd: number; usd_24h_change: number };
   ethereum: { usd: number; usd_24h_change: number };
@@ -14,11 +14,11 @@ interface CoinData {
 export default function MarketPage() {
   const [prices, setPrices] = useState<CoinData | null>(null);
   const [b21Price, setB21Price] = useState<{ priceUsd: string; priceChange: { h24: number } } | null>(null);
+  const [b21LivePrice, setB21LivePrice] = useState<number | null>(null);
   const [activeChart, setActiveChart] = useState<'BTC' | 'ETH' | 'B21'>('BTC');
   const [pairAddress, setPairAddress] = useState<string | null>(null);
 
   useEffect(() => {
-    // Fetch BTC & ETH prices
     const fetchMajorCoins = async () => {
       try {
         const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true');
@@ -29,42 +29,47 @@ export default function MarketPage() {
       }
     };
 
-    // Fetch B21 DexScreener
-    const fetchB21 = async () => {
-        try {
-            const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${B21_CONTRACT_ADDRESS}`);
-            const data = await res.json();
-            
-            if (data.pairs && data.pairs.length > 0) {
-                const pair = data.pairs[0];
-                setB21Price({
-                    priceUsd: pair.priceUsd,
-                    priceChange: { h24: pair.priceChange?.h24 || 0 }
-                });
-                setPairAddress(pair.pairAddress);
-            } else {
-                 // Fallback if no pool found yet
-                setB21Price({
-                    priceUsd: "0.006", // Fallback/Initial price
-                    priceChange: { h24: 0 }
-                });
-            }
-        } catch (error) {
-            console.error("Failed to fetch B21 data", error);
-             // Fallback on error
-             setB21Price({
-                priceUsd: "0.006",
-                priceChange: { h24: 0 }
-            });
+    const fetchB21Live = async () => {
+      try {
+        const data: MarketData = await getMarketData();
+        if (typeof data.b21 === 'number' && data.b21 > 0) {
+          setB21LivePrice(data.b21);
         }
+      } catch (error) {
+        console.error("Failed to fetch B21 live price", error);
+      }
+    };
+
+    const fetchB21 = async () => {
+      try {
+        const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${B21_CONTRACT_ADDRESS}`);
+        const data = await res.json();
+
+        if (data.pairs && data.pairs.length > 0) {
+          const pair = data.pairs[0];
+          setB21Price({
+            priceUsd: pair.priceUsd,
+            priceChange: { h24: pair.priceChange?.h24 || 0 }
+          });
+          setPairAddress(pair.pairAddress);
+        } else {
+          setB21Price(null);
+          setPairAddress(null);
+        }
+      } catch (error) {
+        console.error("Failed to fetch B21 data", error);
+        setB21Price(null);
+      }
     };
 
     fetchMajorCoins();
+    fetchB21Live();
     fetchB21();
-    
+
     const interval = setInterval(() => {
-        fetchMajorCoins();
-        fetchB21();
+      fetchMajorCoins();
+      fetchB21Live();
+      fetchB21();
     }, 60000);
 
     return () => clearInterval(interval);
@@ -170,7 +175,11 @@ export default function MarketPage() {
                         </div>
                     </div>
                     <div className="text-3xl font-mono text-white font-bold tracking-tight text-gradient-red">
-                        ${b21Price?.priceUsd ?? "..."}
+                        {b21LivePrice !== null
+                          ? `$${b21LivePrice.toLocaleString('en-US', { minimumFractionDigits: 6, maximumFractionDigits: 8 })}`
+                          : b21Price?.priceUsd
+                            ? `$${b21Price.priceUsd}`
+                            : "..."}
                     </div>
                 </div>
                 <div className="relative z-10 flex flex-col items-end gap-1">

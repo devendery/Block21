@@ -133,15 +133,11 @@ export default function ICOSection() {
 
         </div>
 
-        {/* CTA */}
+        {/* CTA - High level, without linking to dashboard directly */}
         <div className="text-center">
-            <Link 
-                href="/dashboard"
-                className="inline-flex items-center gap-2 px-8 py-4 bg-primary hover:bg-orange-600 text-white font-bold rounded-xl transition-all shadow-lg shadow-primary/20"
-            >
-                View ICO Dashboard <ArrowRight className="w-5 h-5" />
-            </Link>
-            <p className="mt-4 text-xs text-gray-500">Requires wallet connection • No transaction until you consent</p>
+            <p className="text-xs text-gray-500">
+                Participation details and on-chain records remain available for community review, even after the sale.
+            </p>
         </div>
 
       </div>

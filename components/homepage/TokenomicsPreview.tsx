@@ -49,12 +49,12 @@ export default function TokenomicsPreview() {
               ))}
            </div>
 
-           <Link 
-             href="/tokenomics"
-             className="inline-flex items-center gap-2 px-6 py-3 bg-green-500 hover:bg-green-600 text-black font-bold rounded-xl transition-all"
-           >
-             View Full Tokenomics <ArrowRight className="w-4 h-4" />
-           </Link>
+          <Link 
+            href="/transparency"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-green-500 hover:bg-green-600 text-black font-bold rounded-xl transition-all"
+          >
+            View Full Transparency <ArrowRight className="w-4 h-4" />
+          </Link>
         </div>
 
         {/* Stats Card */}

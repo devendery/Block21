@@ -47,7 +47,7 @@ export default function PriceDiscoveryPage() {
         {/* Bitcoin Today Context */}
         <LivePriceDisplay />
 
-        {/* 1. At Launch (2009): Bitcoin Had No Price */}
+        {/* 1. From Zero Price to Real-World Use */}
         <div className="glass-panel p-4 md:p-10 border-red-500/20 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-8 opacity-5">
                 <History size={180} />
@@ -55,12 +55,12 @@ export default function PriceDiscoveryPage() {
             
             <h2 className="text-2xl md:text-3xl font-heading font-bold text-white mb-6 flex items-center gap-3">
                 <span className="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full bg-orange-500/20 text-orange-500 text-base md:text-lg font-black shrink-0">1</span>
-                At Launch (2009): Bitcoin Had No Price
+                From Zero Price to Real-World Use
             </h2>
             
             <div className="space-y-6">
                 <p className="text-gray-300 text-lg">
-                    When Bitcoin launched in 2009, it had no market price.
+                    When Bitcoin launched in 2009, it had no quoted price at all. Value only started to emerge once people chose to use it for something real.
                 </p>
                 
                 <div className="grid md:grid-cols-2 gap-8 mb-6">
@@ -79,31 +79,8 @@ export default function PriceDiscoveryPage() {
                             ))}
                         </ul>
                         <p className="text-gray-400 mt-4 text-sm italic border-l-2 border-orange-500 pl-4 py-2 bg-orange-500/5">
-                            Early participants were testing software, not investing money. <br/>
-                            <span className="text-white font-bold">Bitcoin began with no price, not a low price.</span>
-                        </p>
-                    </div>
-                    
-                    <div className="bg-white/5 p-6 rounded-xl border border-white/10">
-                        <h3 className="font-heading font-bold text-orange-400 mb-4 flex items-center gap-2">
-                            <History className="w-5 h-5" />
-                            First Assignable Price (Oct 5, 2009)
-                        </h3>
-                        <p className="text-sm text-gray-400 mb-3">
-                            The first recorded exchange rate came from an experimental calculation:
-                        </p>
-                        <div className="space-y-3">
-                            <div className="flex justify-between items-center p-3 bg-black/20 rounded-lg">
-                                <span className="text-gray-400">Rate</span>
-                                <span className="text-white font-bold">1 USD ≈ 1,309 BTC</span>
-                            </div>
-                            <div className="flex justify-between items-center p-3 bg-black/20 rounded-lg border border-orange-500/20">
-                                <span className="text-gray-400">Implied Value</span>
-                                <span className="text-orange-500 font-bold">~$0.00076 per BTC</span>
-                            </div>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-3 italic">
-                            This was not a mature market price — it was a reference calculation, created before liquidity or demand.
+                            Early participants were mainly stress‑testing software, not chasing returns. <br/>
+                            <span className="text-white font-bold">Bitcoin began with no price, not a promised upside.</span>
                         </p>
                     </div>
                 </div>
@@ -113,7 +90,9 @@ export default function PriceDiscoveryPage() {
                         <Coins className="w-5 h-5 text-red-500" />
                         First Real-World Transaction (Pizza Day — May 22, 2010)
                     </h3>
-                    <p className="text-gray-400 mb-4 text-sm">Bitcoin’s first real economic valuation occurred when it was used to buy goods:</p>
+                    <p className="text-gray-400 mb-4 text-sm">
+                        Bitcoin’s first widely cited economic reference came when 10,000 BTC paid for two pizzas. At that moment, the network moved from pure theory into everyday utility.
+                    </p>
                     <div className="grid md:grid-cols-3 gap-4">
                         <div className="bg-black/20 p-4 rounded-lg">
                             <div className="text-gray-400 text-xs uppercase mb-1">BTC Spent</div>
@@ -130,50 +109,24 @@ export default function PriceDiscoveryPage() {
                     </div>
                     <div className="mt-4 flex items-center gap-2 text-sm text-gray-300 bg-white/5 p-3 rounded-lg">
                         <TrendingUp className="w-4 h-4 text-green-500" />
-                        <span>This marked Bitcoin’s transition from: <span className="text-white font-bold">theoretical reference → utility-based value</span></span>
+                        <span>This moment marked Bitcoin’s transition from: <span className="text-white font-bold">abstract idea → asset with utility‑based value</span>.</span>
                     </div>
                 </div>
 
-                <div className="bg-white/5 border border-white/10 rounded-xl p-6">
-                    <h3 className="font-heading font-bold text-white mb-4">Summary: Bitcoin’s Earliest Price Range</h3>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left whitespace-nowrap md:whitespace-normal">
-                            <thead className="text-gray-500 border-b border-white/10">
-                                <tr>
-                                    <th className="pb-3 font-medium px-4">Period</th>
-                                    <th className="pb-3 font-medium px-4">BTC Price (USD)</th>
-                                </tr>
-                            </thead>
-                            <tbody className="text-gray-300">
-                                <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                                    <td className="py-4 px-4 font-medium text-white">Late 2009</td>
-                                    <td className="py-4 px-4">~$0.00076</td>
-                                </tr>
-                                <tr className="hover:bg-white/5 transition-colors">
-                                    <td className="py-4 px-4 font-medium text-white">Early–Mid 2010</td>
-                                    <td className="py-4 px-4">~$0.001 – $0.004</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <p className="text-center text-gray-400 mt-4 italic font-medium">
-                        Bitcoin’s earliest value was fractions of a cent, discovered gradually, not declared.
-                    </p>
-                </div>
             </div>
         </div>
 
-        {/* 2. Why Direct Comparisons Require Context */}
+        {/* 2. Translating 2010 Value into Today’s Terms */}
         <div className="glass-panel p-4 md:p-10 border-red-500/20">
             <h2 className="text-2xl md:text-3xl font-heading font-bold text-white mb-6 flex items-center gap-3">
                 <span className="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full bg-red-500/20 text-red-500 text-base md:text-lg font-black shrink-0">2</span>
-                Why Direct Comparisons Require Context
+                Translating 2010 Value into Today’s Terms
             </h2>
             
             <div className="grid md:grid-cols-2 gap-8 mb-8">
                 <div className="space-y-4">
                     <p className="text-gray-300 text-lg">
-                        Bitcoin’s early prices existed in a <span className="text-white font-bold">zero-infrastructure environment</span>:
+                        Bitcoin’s earliest usage‑based prices appeared in a <span className="text-white font-bold">zero‑infrastructure environment</span>:
                     </p>
                     <ul className="space-y-3">
                         {["No exchanges", "No user-friendly wallets", "No regulation", "No liquidity", "Pure experimentation"].map((item, i) => (
@@ -184,35 +137,35 @@ export default function PriceDiscoveryPage() {
                         ))}
                     </ul>
                     <p className="text-gray-400 italic mt-2">
-                        Those prices reflected testing, not adoption or demand.
+                        Those numbers captured experimentation, not mature demand or broad adoption.
                     </p>
                 </div>
 
                 <div className="bg-red-500/10 p-6 rounded-xl border border-red-500/20">
                     <h3 className="font-heading font-bold text-red-300 mb-4 flex items-center gap-2">
                         <Scale className="w-5 h-5" />
-                        Inflation-Adjusted Context (Not a Prediction)
+                        Inflation & Purchasing Power (Simple Reference Only)
                     </h3>
                     <p className="text-sm text-gray-400 mb-4">
-                        When adjusted for USD inflation, currency devaluation, and growth of the digital economy:
+                        To relate an implied 2010 utility value (~$0.004 per BTC) to today, we apply a simple, conservative adjustment factor instead of complex macro modelling.
                     </p>
                     <div className="text-center py-4 bg-black/20 rounded-lg border border-red-500/30 mb-4">
-                        <div className="text-gray-400 text-sm mb-1">Bitcoin’s earliest experimental value roughly maps to:</div>
-                        <div className="text-2xl md:text-3xl font-heading font-black text-white">~$0.005 – $0.008</div>
+                        <div className="text-gray-400 text-sm mb-1">Illustrative, inflation‑aware utility band:</div>
+                        <div className="text-2xl md:text-3xl font-heading font-black text-white">~3× of $0.004 ≈ $0.012</div>
                         <div className="text-xs text-gray-500 mt-1">in today’s terms</div>
                     </div>
                     <p className="text-xs text-gray-400 text-center italic">
-                        This range is contextual, not a price target.
+                        This is a rough reference band, not a forecast, target, or guaranteed fair value.
                     </p>
                 </div>
             </div>
         </div>
 
-        {/* 3. How This Relates to Block21 (B21) */}
+        {/* 3. How This Anchors Block21 (B21) */}
         <div className="glass-panel p-6 md:p-10 border-red-500/20 bg-gradient-to-b from-black/40 to-red-500/5">
             <h2 className="text-2xl md:text-3xl font-heading font-bold text-white mb-8 flex items-center gap-3">
                 <span className="flex items-center justify-center w-10 h-10 rounded-full bg-red-500/20 text-red-500 text-lg font-black shrink-0">3</span>
-                How This Relates to Block21 (B21)
+                How This Anchors Block21 (B21)
             </h2>
 
             <div className="grid md:grid-cols-2 gap-12 items-center mb-10">
@@ -245,7 +198,7 @@ export default function PriceDiscoveryPage() {
                                 <tr>
                                     <td className="p-3 text-gray-400">Price discovery</td>
                                     <td className="p-3 text-white">Pure experiment</td>
-                                    <td className="p-3 text-white">Transparent reference</td>
+                                    <td className="p-3 text-white">Market‑driven, with a transparent utility reference</td>
                                 </tr>
                                 <tr>
                                     <td className="p-3 text-gray-400">Supply clarity</td>
@@ -260,28 +213,34 @@ export default function PriceDiscoveryPage() {
                 <div className="relative">
                     <div className="absolute inset-0 bg-red-500/20 blur-3xl rounded-full opacity-20 animate-pulse" />
                     <div className="relative glass-card p-8 border-red-500/30 text-center space-y-4">
-                        <div className="text-gray-400 uppercase tracking-widest text-sm font-bold">Starting Reference Price</div>
+                        <div className="text-gray-400 uppercase tracking-widest text-sm font-bold">Internal Utility Reference</div>
                         <div className="text-5xl md:text-6xl font-heading font-black text-red-500">
-                            $0.006
+                            $0.012
                         </div>
                         <div className="text-sm text-gray-500">per B21</div>
                         <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-gray-300 font-medium mt-4 text-left space-y-2">
                             <p className="flex items-start gap-2">
                                 <CheckCircle2 className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                                <span>Placed within Bitcoin’s inflation-adjusted early value range</span>
+                                <span>Inspired by Bitcoin’s 2010 pizza‑day implied utility value of roughly $0.004 per BTC.</span>
                             </p>
                             <p className="flex items-start gap-2">
                                 <CheckCircle2 className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                                <span>Chosen for clarity and transparency, not prediction</span>
+                                <span>A simple ≈3× adjustment for purchasing power moves that historical utility point into today’s environment at about $0.012.</span>
+                            </p>
+                            <p className="flex items-start gap-2">
+                                <CheckCircle2 className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                                <span>Block21 uses this level purely as a design anchor for in‑platform pricing, not as a statement about what the market “should” pay.</span>
                             </p>
                         </div>
-                        <p className="text-xs text-gray-500 italic">This is a starting reference, not a promise.</p>
+                        <p className="text-xs text-gray-500 italic">
+                            This internal reference does not cap, guarantee, or direct any external market price.
+                        </p>
                     </div>
                 </div>
             </div>
         </div>
 
-        {/* 4. Supply Comparison */}
+        {/* 4. Supply Comparison (Structure, Not Valuation) */}
         <div className="glass-panel p-6 md:p-10 border-white/10">
             <h2 className="text-2xl md:text-3xl font-heading font-bold text-white mb-6 flex items-center gap-3">
                 <span className="flex items-center justify-center w-10 h-10 rounded-full bg-white/10 text-white text-lg font-black shrink-0">4</span>
@@ -312,56 +271,83 @@ export default function PriceDiscoveryPage() {
             <div className="space-y-3">
                 <div className="flex items-start gap-3">
                     <CheckCircle2 className="w-5 h-5 text-green-500 mt-1 shrink-0" />
-                    <p className="text-gray-300">Block21 has <span className="text-white font-bold">10× lower total supply</span> than Bitcoin</p>
+                    <p className="text-gray-300">Block21 has <span className="text-white font-bold">100× lower total supply</span> than Bitcoin.</p>
                 </div>
                 <div className="flex items-start gap-3">
                     <CheckCircle2 className="w-5 h-5 text-green-500 mt-1 shrink-0" />
-                    <p className="text-gray-300">Scarcity is structural, but <span className="text-white font-bold">value must still be earned by the market</span></p>
+                    <p className="text-gray-300">
+                        Scarcity here is a structural property only — <span className="text-white font-bold">any price or value outcome is left entirely to the market</span>.
+                    </p>
                 </div>
             </div>
         </div>
 
-        {/* 5. Final Alignment Summary */}
-        <div className="glass-panel p-4 md:p-10 border-white/10">
+        {/* 5. Reference Value Notice ($0.012) */}
+        <div className="glass-panel p-6 md:p-10 border-red-500/30 bg-red-500/5">
             <h2 className="text-2xl md:text-3xl font-heading font-bold text-white mb-6 flex items-center gap-3">
-                <span className="flex items-center justify-center w-10 h-10 rounded-full bg-white/10 text-white text-lg font-black shrink-0">5</span>
-                Final Alignment Summary
+                <span className="flex items-center justify-center w-10 h-10 rounded-full bg-red-500/20 text-red-500 text-lg font-black shrink-0">5</span>
+                Reference Value Notice ($0.012)
             </h2>
 
-            <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="bg-white/5 border-b border-white/10">
-                            <th className="p-4 text-gray-400 font-medium">Metric</th>
-                            <th className="p-4 text-gray-400 font-medium">Bitcoin (Early Era)</th>
-                            <th className="p-4 text-red-500 font-bold">Block21 (Launch)</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                        <tr>
-                            <td className="p-4 text-gray-400">Value Origin</td>
-                            <td className="p-4 text-white">Zero (then accidental)</td>
-                            <td className="p-4 text-white">Calculated Reference</td>
-                        </tr>
-                        <tr>
-                            <td className="p-4 text-gray-400">Starting Price</td>
-                            <td className="p-4 text-white">None (then &lt; $0.01)</td>
-                            <td className="p-4 text-white">$0.006 (Fixed)</td>
-                        </tr>
-                        <tr>
-                            <td className="p-4 text-gray-400">Goal</td>
-                            <td className="p-4 text-white">Tech Experiment</td>
-                            <td className="p-4 text-white">Value Preservation</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <div className="grid md:grid-cols-2 gap-8">
+                <div className="space-y-4">
+                    <div className="bg-black/40 border border-red-500/30 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center gap-2 text-sm text-red-200 font-semibold uppercase tracking-wide">
+                            <Info className="w-4 h-4" />
+                            <span>What the $0.012 Reference Means</span>
+                        </div>
+                        <p className="text-sm text-gray-300">
+                            Block21 (B21) uses <span className="font-bold text-white">$0.012 per B21</span> as an internal utility reference only. It exists to calibrate platform pricing — for example, game access or participation costs — so that experiences feel consistent over time.
+                        </p>
+                        <p className="text-sm text-gray-300">
+                            This figure is inspired by Bitcoin’s 2010 pizza‑day transaction, where 10,000 BTC implied roughly <span className="font-bold text-white">$0.004</span> of utility value per BTC. Applying a simple ≈3× adjustment for changes in purchasing power gives a present‑day reference near <span className="font-bold text-white">$0.012</span>.
+                        </p>
+                    </div>
+                </div>
 
-            <div className="mt-8 text-center">
-                 <div className="inline-flex items-center gap-2 text-red-200 bg-red-500/10 px-4 py-2 rounded-full border border-red-500/20 text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-red-500" />
-                    <span>Price Discovery is not magic — it is the market finding truth.</span>
-                 </div>
+                <div className="space-y-4">
+                    <div className="bg-red-500/15 border border-red-500/40 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center gap-2 text-sm text-red-200 font-semibold uppercase tracking-wide">
+                            <Info className="w-4 h-4" />
+                            <span>Important Clarifications</span>
+                        </div>
+                        <ul className="space-y-2 text-sm text-red-100">
+                            <li>The $0.012 figure is not an investment valuation, price guarantee, or expected market price.</li>
+                            <li>It does not describe what B21 “should” trade at on any exchange.</li>
+                            <li>Actual B21 prices are determined solely by open trading and available liquidity and may move significantly over time.</li>
+                            <li>No assurance is made regarding price stability, appreciation, or future value.</li>
+                        </ul>
+                    </div>
+
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center gap-2 text-sm text-gray-200 font-semibold uppercase tracking-wide">
+                            <Info className="w-4 h-4" />
+                            <span>Purpose of the Reference</span>
+                        </div>
+                        <ul className="space-y-2 text-sm text-gray-200">
+                            <li>Provide a consistent user experience across games and platform features.</li>
+                            <li>Express in‑app prices in stable‑value terms while settling in B21 on‑chain.</li>
+                            <li>Avoid arbitrary or hype‑driven pricing inside the ecosystem.</li>
+                            <li>Leave external market behaviour completely free and uncapped by this internal anchor.</li>
+                        </ul>
+                    </div>
+
+                    <div className="bg-black/50 border border-red-500/30 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center gap-2 text-sm text-gray-200 font-semibold uppercase tracking-wide">
+                            <Scale className="w-4 h-4 text-gold-400" />
+                            <span>Utility-First Positioning & Disclaimer</span>
+                        </div>
+                        <p className="text-sm text-gray-300">
+                            B21 is designed as a utility token for platform access and participation. Any economic value that might emerge is expected, if at all, to arise from actual usage, engagement, and real demand — not from promotional promises or expectations of profit.
+                        </p>
+                        <div className="flex items-start gap-2 text-xs text-red-200">
+                            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                            <span>
+                                B21 does not constitute an investment product, security, or financial instrument. Participation involves risk, including potential loss of value. Users should assess their own circumstances and comply with applicable laws and regulations.
+                            </span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 

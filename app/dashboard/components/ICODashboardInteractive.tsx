@@ -51,6 +51,8 @@ export default function ICODashboardInteractive() {
   const [history, setHistory] = useState<any[]>([]);
   const [rounds, setRounds] = useState(ROUNDS);
   const [loading, setLoading] = useState(true);
+  const activeRound = rounds.find((round) => round.status === "ACTIVE");
+  const maxUsdPerInvestor = activeRound ? activeRound.allocation * 0.05 * activeRound.price : undefined;
 
   // Fetch stats from Google Sheet
   const fetchStats = async () => {
@@ -181,7 +183,11 @@ export default function ICODashboardInteractive() {
 
       {/* Action Area */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <ParticipationForm price={0.006} onSuccess={fetchStats} />
+          <ParticipationForm
+            price={activeRound?.price ?? 0.006}
+            maxBuy={maxUsdPerInvestor}
+            onSuccess={fetchStats}
+          />
           <ParticipationHistory data={history} loading={loading} onRefresh={fetchStats} />
       </div>
 

@@ -10,13 +10,14 @@ import WalletConnect from "./WalletConnect";
 
 const navItems = [
   { name: "Home", href: "/" },
-  { name: "Learn", href: "/learn" },
+  { name: "Market", href: "/market" },
   { name: "Roadmap", href: "/roadmap" },
-  { name: "Tokenomics", href: "/tokenomics" },
   { name: "Transparency", href: "/transparency" },
+  { name: "User Experience", href: "/user-experience" },
   { name: "Whitepaper", href: "/whitepaper" },
   { name: "Pitch Deck", href: "/pitch" },
   { name: "Game", href: "/game" },
+  { name: "Learn", href: "/learn" },
 ];
 
 export default function Navbar() {
