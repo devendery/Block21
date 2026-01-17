@@ -24,19 +24,39 @@ type Transaction = {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
-  // Initialize with some mock data or 0
-  const [balanceUSD, setBalanceUSD] = useState(0);
-  const [balanceB21, setBalanceB21] = useState(0);
+  const [balanceUSD, setBalanceUSD] = useState(100);
+  const [balanceB21, setBalanceB21] = useState(100);
   const [history, setHistory] = useState<Transaction[]>([]);
 
-  // Load from LocalStorage on mount
+  // Load from LocalStorage on mount, but ensure a minimum starter balance
   useEffect(() => {
     const savedUSD = localStorage.getItem('b21_balance_usd');
     const savedB21 = localStorage.getItem('b21_balance_b21');
     const savedHistory = localStorage.getItem('b21_history');
 
-    if (savedUSD) setBalanceUSD(parseFloat(savedUSD));
-    if (savedB21) setBalanceB21(parseFloat(savedB21));
+    const hasUSD = savedUSD !== null;
+    const hasB21 = savedB21 !== null;
+
+    if (!hasUSD && !hasB21) {
+      setBalanceUSD(100);
+      setBalanceB21(100);
+      localStorage.setItem('b21_balance_usd', '100');
+      localStorage.setItem('b21_balance_b21', '100');
+    } else {
+      const usd = hasUSD ? parseFloat(savedUSD || '0') : 0;
+      const b21 = hasB21 ? parseFloat(savedB21 || '0') : 0;
+
+      if (usd === 0 && b21 === 0) {
+        setBalanceUSD(100);
+        setBalanceB21(100);
+        localStorage.setItem('b21_balance_usd', '100');
+        localStorage.setItem('b21_balance_b21', '100');
+      } else {
+        setBalanceUSD(usd);
+        setBalanceB21(b21);
+      }
+    }
+
     if (savedHistory) setHistory(JSON.parse(savedHistory));
   }, []);
 

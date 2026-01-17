@@ -172,5 +172,15 @@ export const useWallet = () => {
     throw new Error("No wallet connected");
   };
 
-  return { ...walletState, connectWallet, signMessage };
+  const disconnectWallet = () => {
+    setWalletState({
+      address: null,
+      isConnected: false,
+      chainId: null,
+      signature: null,
+      error: null,
+    });
+  };
+
+  return { ...walletState, connectWallet, disconnectWallet, signMessage };
 };
