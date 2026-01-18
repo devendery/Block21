@@ -45,7 +45,7 @@ export default function PitchPage() {
             </span>
           </h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            "B21 is a fixed-supply utility token powering skill-based digital ecosystems."
+            B21 is a fixed-supply utility token powering skill-based digital ecosystems.
           </p>
         </div>
 
@@ -103,8 +103,7 @@ export default function PitchPage() {
                 "Platform fee from games",
                 "Premium access",
                 "Brand partnerships",
-                "NFT utilities",
-                "Advertisement"
+                "NFT utilities"
               ].map((item, i) => (
                 <div key={i} className="p-4 rounded-xl bg-black/40 border border-white/5 text-gray-300 text-center text-sm font-medium">
                   {item}

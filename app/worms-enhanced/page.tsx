@@ -1,0 +1,954 @@
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { useWallet } from '@/hooks/useWallet';
+import WormsGame from '@/components/game/WormsGame';
+import MultiplayerLobby from '@/components/game/MultiplayerLobby';
+import AnimatedSnake from '@/components/showcase/AnimatedSnake';
+import {
+  Gamepad2,
+  Trophy,
+  Users,
+  Play,
+  Settings,
+  Wallet,
+  Copy,
+  Check,
+  Crown,
+  Zap,
+  Coins,
+  Smile,
+  Palette,
+  Wand2,
+  X,
+  Share2,
+} from 'lucide-react';
+import type { GameRoom } from '@/lib/multiplayer';
+import { UserProfile, WormsMode } from '@/types/game';
+
+type GameView = 'menu' | 'lobby' | 'playing' | 'tournament';
+
+export default function WormsEnhancedPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { address, isConnected, connectWallet } = useWallet();
+  const [view, setView] = useState<GameView>('menu');
+  const [gameMode, setGameMode] = useState<'single' | 'multiplayer' | 'tournament'>('single');
+  const [room, setRoom] = useState<GameRoom | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [selectedMode, setSelectedMode] = useState<WormsMode>('infinity');
+  const [copied, setCopied] = useState(false);
+  const [showGameOver, setShowGameOver] = useState(false);
+  const [lastScore, setLastScore] = useState<number | null>(null);
+  const [showWardrobe, setShowWardrobe] = useState(false);
+  const [wardrobeTab, setWardrobeTab] = useState<'skins' | 'colors' | 'faces'>('skins');
+  const [activeSkin, setActiveSkin] = useState<string>('classic');
+  const [selectedFace, setSelectedFace] = useState<string>('classic-eyes');
+  const [savingSkin, setSavingSkin] = useState(false);
+
+  // Check for invite link
+  useEffect(() => {
+    const roomId = searchParams.get('room');
+    const inviteCode = searchParams.get('code');
+    
+    if (roomId || inviteCode) {
+      joinRoomByCode(roomId || undefined, inviteCode || undefined);
+    }
+  }, [searchParams]);
+
+  // Fetch profile
+  useEffect(() => {
+    if (address) {
+      fetch(`/api/user/profile?address=${address}`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.error) {
+            setProfile(data);
+            if (data.activeSkin) setActiveSkin(data.activeSkin);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [address]);
+
+  const skins = ['classic', 'neon', 'shadow', 'gold', 'cyber', 'toxin', 'crimson', 'void'];
+  const faceOptions = [
+    'classic-eyes',
+    'wide-eyes',
+    'sleepy-eyes',
+    'alien-eyes',
+    'angry-eyes',
+    'happy-eyes',
+  ];
+
+  const applySkin = async (skinId: string) => {
+    if (!address) return;
+    setActiveSkin(skinId);
+    setSavingSkin(true);
+    try {
+      await fetch('/api/user/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address,
+          data: { activeSkin: skinId },
+        }),
+      });
+      setProfile((prev) =>
+        prev ? { ...prev, activeSkin: skinId } : prev
+      );
+    } catch (err) {
+      console.error('Failed to save skin', err);
+    } finally {
+      setSavingSkin(false);
+    }
+  };
+
+  // Require MetaMask connection
+  if (!isConnected) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-slate-900 rounded-3xl border border-slate-700 p-8 text-center">
+          <Wallet className="w-16 h-16 mx-auto mb-4 text-cyan-400" />
+          <h1 className="text-3xl font-black mb-4 bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">
+            Connect MetaMask
+          </h1>
+          <p className="text-slate-400 mb-6">
+            You need to connect your MetaMask wallet to play Block21 Worms.
+            This ensures secure gameplay and enables crypto payments.
+          </p>
+          <button
+            onClick={connectWallet}
+            className="w-full py-4 bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-700 hover:to-emerald-700 text-white rounded-xl font-black text-lg transition-all flex items-center justify-center gap-2"
+          >
+            <Wallet className="w-5 h-5" />
+            Connect MetaMask
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const createRoom = async (mode: 'lobby' | 'tournament') => {
+    if (!address) return;
+
+    try {
+      const username = profile?.username || `Player${address.slice(0, 6)}`;
+      const response = await fetch('/api/game/room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          mode,
+          player: {
+            address,
+            username,
+            skin: profile?.activeSkin || 'classic',
+            ready: false,
+            connected: true,
+          },
+          settings: mode === 'tournament' ? {
+            entryFee: 50,
+            prizePool: 0,
+          } : {},
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setRoom(data.room);
+        setView('lobby');
+        setGameMode(mode === 'tournament' ? 'tournament' : 'multiplayer');
+      }
+    } catch (error) {
+      console.error('Failed to create room:', error);
+      alert('Failed to create room. Please try again.');
+    }
+  };
+
+  const joinRoomByCode = async (roomId?: string, code?: string) => {
+    if (!address) return;
+
+    try {
+      let response;
+      if (roomId) {
+        response = await fetch(`/api/game/room?id=${roomId}`);
+      } else if (code) {
+        response = await fetch(`/api/game/room?code=${code}`);
+      } else {
+        return;
+      }
+
+      const data = await response.json();
+      if (data.success && data.room) {
+        // Join the room
+        const username = profile?.username || `Player${address.slice(0, 6)}`;
+        const joinResponse = await fetch('/api/game/room', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'join',
+            roomId: data.room.id,
+            player: {
+              address,
+              username,
+              skin: profile?.activeSkin || 'classic',
+              ready: false,
+              connected: true,
+            },
+          }),
+        });
+
+        const joinData = await joinResponse.json();
+        if (joinData.success) {
+          setRoom(joinData.room);
+          setView('lobby');
+          setGameMode(data.room.mode === 'tournament' ? 'tournament' : 'multiplayer');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to join room:', error);
+    }
+  };
+
+  const handleRoomUpdate = async (updates: Partial<GameRoom>) => {
+    if (!room) return;
+
+    try {
+      const response = await fetch('/api/game/room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          roomId: room.id,
+          updates,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setRoom(data.room);
+      }
+    } catch (error) {
+      console.error('Failed to update room:', error);
+    }
+  };
+
+  const handleStartGame = () => {
+    if (!room) return;
+    handleRoomUpdate({ status: 'playing' });
+    setView('playing');
+  };
+
+  const handleLeaveRoom = async () => {
+    if (!room || !address) return;
+
+    try {
+      await fetch('/api/game/room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'leave',
+          roomId: room.id,
+          player: { address },
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to leave room:', error);
+    }
+
+    setRoom(null);
+    setView('menu');
+  };
+
+  const copyInviteLink = () => {
+    if (!room) return;
+    const link = `${window.location.origin}/worms-enhanced?room=${room.id}&code=${room.inviteCode}`;
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (view === 'lobby' && room) {
+    return (
+      <MultiplayerLobby
+        room={room}
+        onStart={handleStartGame}
+        onLeave={handleLeaveRoom}
+        onUpdate={handleRoomUpdate}
+      />
+    );
+  }
+
+  if (view === 'playing') {
+    return (
+      <div className="fixed inset-0 z-50 bg-black">
+        {showGameOver && lastScore !== null ? (
+          <div className="flex items-center justify-center w-full h-full px-4">
+            <div className="w-full max-w-xl rounded-[32px] bg-slate-950/95 border border-sky-600/70 px-8 py-6 shadow-[0_0_60px_rgba(56,189,248,0.8)]">
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-xs font-semibold tracking-[0.3em] uppercase text-sky-300">
+                  Result
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGameOver(false);
+                    setLastScore(null);
+                    if (room) {
+                      setView('lobby');
+                    } else {
+                      setView('menu');
+                    }
+                  }}
+                  className="w-9 h-9 rounded-full bg-slate-900/80 border border-slate-600 flex items-center justify-center text-slate-300 hover:bg-slate-800"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex flex-col items-center mb-4">
+                <div className="relative w-28 h-28 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 shadow-[0_0_40px_rgba(250,204,21,0.75)] flex items-center justify-center">
+                  <Trophy className="w-14 h-14 text-amber-950 drop-shadow-[0_4px_0_rgba(0,0,0,0.4)]" />
+                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-slate-950/90 border border-amber-300 text-xs font-black text-amber-100 font-mono">
+                    {lastScore}
+                  </div>
+                </div>
+                <div className="mt-4 text-[13px] text-sky-100/80">
+                  Great run,{' '}
+                  <span className="font-semibold">
+                    {profile?.username || `Player${address?.slice(0, 6) || ''}`}
+                  </span>
+                  .
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-sky-100">
+                <div className="rounded-2xl bg-slate-900/80 border border-slate-700 px-4 py-3">
+                  <div className="text-[11px] text-sky-400 uppercase tracking-[0.2em]">
+                    Collected
+                  </div>
+                  <div className="mt-1 flex items-baseline gap-1">
+                    <Coins className="w-4 h-4 text-amber-300" />
+                    <span className="font-mono text-lg">
+                      {Math.max(0, Math.floor(lastScore / 10))}
+                    </span>
+                    <span className="text-[11px] text-slate-400">coins</span>
+                  </div>
+                </div>
+                <div className="rounded-2xl bg-slate-900/80 border border-slate-700 px-4 py-3">
+                  <div className="text-[11px] text-sky-400 uppercase tracking-[0.2em]">
+                    Lifetime
+                  </div>
+                  <div className="mt-1 flex items-baseline gap-1">
+                    <span className="font-mono text-lg">
+                      {Math.max(6, Math.floor(lastScore / 25))}s
+                    </span>
+                    <span className="text-[11px] text-slate-400">in arena</span>
+                  </div>
+                </div>
+                <div className="rounded-2xl bg-slate-900/80 border border-slate-700 px-4 py-3">
+                  <div className="text-[11px] text-sky-400 uppercase tracking-[0.2em]">
+                    Defeated
+                  </div>
+                  <div className="mt-1 flex items-baseline gap-1">
+                    <span className="font-mono text-lg">
+                      {Math.floor(lastScore / 120)}
+                    </span>
+                    <span className="text-[11px] text-slate-400">worms</span>
+                  </div>
+                </div>
+                <div className="rounded-2xl bg-slate-900/80 border border-slate-700 px-4 py-3">
+                  <div className="text-[11px] text-sky-400 uppercase tracking-[0.2em]">
+                    Experience
+                  </div>
+                  <div className="mt-1 flex items-baseline gap-1">
+                    <span className="font-mono text-lg">
+                      {Math.floor(lastScore / 5)}
+                    </span>
+                    <span className="text-[11px] text-slate-400">xp</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-slate-900/90 border border-slate-600 text-[13px] font-semibold text-sky-100 hover:bg-slate-800"
+                >
+                  <Share2 className="w-4 h-4 text-sky-300" />
+                  Share run
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGameOver(false);
+                    setLastScore(null);
+                  }}
+                  className="inline-flex items-center gap-3 px-8 py-3 rounded-full bg-emerald-400 text-black text-sm font-black shadow-[0_10px_0_rgba(6,95,70,1)] hover:translate-y-[2px] hover:shadow-[0_6px_0_rgba(6,95,70,1)] transition-all"
+                >
+                  <Play className="w-5 h-5" />
+                  Restart
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <WormsGame
+            onGameOver={(score) => {
+              setLastScore(score);
+              setShowGameOver(true);
+              if (room) {
+                handleRoomUpdate({ status: 'finished' });
+              }
+            }}
+            playerName={profile?.username || `Player${address?.slice(0, 6)}`}
+            skinId={(profile?.activeSkin as any) || activeSkin || 'classic'}
+            mode={selectedMode}
+            multiplayer={gameMode !== 'single'}
+            roomId={room?.id}
+          />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0b1830] text-white pt-20 relative overflow-hidden font-sans">
+      <div className="absolute inset-0 pointer-events-none opacity-40">
+        <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:16px_16px]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0a1e3f] via-transparent to-[#051024]" />
+      </div>
+
+      <div className="relative z-10 max-w-6xl mx-auto px-4 pb-12">
+        <header className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-400 to-emerald-400 flex items-center justify-center text-black font-bold">
+              {profile?.username?.[0] || address?.[0]?.toUpperCase() || 'P'}
+            </div>
+            <div>
+              <div className="text-lg font-black">
+                {profile?.username || `Player${address?.slice(0, 6) || ''}`}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-sky-200/80 font-mono">
+                <span>Lvl {profile?.level ?? 1}</span>
+                <span>•</span>
+                <span>{profile?.highScore ?? 0} best</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-sky-900/70 border border-sky-500/60">
+              <Zap className="w-4 h-4 text-yellow-300" />
+              <span className="font-mono">10 / 20</span>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-amber-900/70 border border-amber-400/60">
+              <Coins className="w-4 h-4 text-amber-300" />
+              <span className="font-mono">{profile?.totalB21Earned ?? 0} B21</span>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex gap-6">
+          <div className="hidden lg:flex flex-col gap-3 w-24">
+            <button className="h-16 rounded-2xl bg-sky-900/70 border border-sky-500/60 flex items-center justify-center shadow-lg">
+              <Gamepad2 className="w-7 h-7 text-sky-300" />
+            </button>
+            <button className="h-16 rounded-2xl bg-emerald-900/70 border border-emerald-500/60 flex items-center justify-center shadow-lg">
+              <Trophy className="w-7 h-7 text-amber-300" />
+            </button>
+            <button className="h-16 rounded-2xl bg-rose-900/70 border border-rose-500/60 flex items-center justify-center shadow-lg">
+              <Zap className="w-7 h-7 text-rose-300" />
+            </button>
+            <button
+              onClick={() => setShowWardrobe(true)}
+              className="mt-auto h-16 rounded-2xl bg-cyan-900/70 border border-cyan-400/70 flex items-center justify-center shadow-[0_0_24px_rgba(34,211,238,0.7)]"
+            >
+              <Smile className="w-7 h-7 text-cyan-200" />
+            </button>
+          </div>
+
+          <main className="flex-1 flex flex-col lg:flex-row gap-6 items-stretch">
+            <div className="flex-1 rounded-3xl bg-sky-950/80 border border-sky-700/70 shadow-[0_0_40px_rgba(56,189,248,0.5)] p-6 flex flex-col items-center justify-between">
+              <div className="text-center mb-4">
+                <div className="inline-flex items-center justify-center px-4 py-1 rounded-full bg-sky-900/70 border border-sky-500/60 text-xs font-mono tracking-[0.25em] uppercase text-sky-200 mb-3">
+                  Block21
+                </div>
+                <h1 className="text-5xl md:text-6xl font-black mb-1 text-yellow-300 drop-shadow-[0_4px_0_rgba(0,0,0,0.6)]">
+                  Worms Arena
+                </h1>
+                <p className="text-sm md:text-base text-sky-100/80">
+                  Eat, grow and outmaneuver others in a skill-based B21 arena.
+                </p>
+              </div>
+
+              <div className="relative w-full max-w-md aspect-[4/3] rounded-3xl bg-gradient-to-br from-sky-900 via-indigo-900 to-slate-900 border border-sky-600/60 overflow-hidden flex items-center justify-center mb-4">
+                <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_20%_20%,rgba(56,189,248,0.6),transparent_55%),radial-gradient(circle_at_80%_80%,rgba(251,191,36,0.6),transparent_55%)]" />
+                <AnimatedSnake skin={activeSkin} length={26} interactive animated size={48} />
+              </div>
+
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4 w-full">
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-2 rounded-full bg-slate-900/80 border border-slate-600/60 px-2 py-1">
+                    <button
+                      onClick={() => setGameMode('single')}
+                      className={[
+                        'px-3 py-1 rounded-full text-xs font-semibold transition-colors',
+                        gameMode === 'single'
+                          ? 'bg-emerald-400 text-black'
+                          : 'text-slate-200 hover:bg-slate-800',
+                      ].join(' ')}
+                    >
+                      Solo
+                    </button>
+                    <button
+                      onClick={() => setGameMode('multiplayer')}
+                      className={[
+                        'px-3 py-1 rounded-full text-xs font-semibold transition-colors',
+                        gameMode === 'multiplayer'
+                          ? 'bg-sky-400 text-black'
+                          : 'text-slate-200 hover:bg-slate-800',
+                      ].join(' ')}
+                    >
+                      Lobby
+                    </button>
+                    <button
+                      onClick={() => setGameMode('tournament')}
+                      className={[
+                        'px-3 py-1 rounded-full text-xs font-semibold transition-colors',
+                        gameMode === 'tournament'
+                          ? 'bg-amber-400 text-black'
+                          : 'text-slate-200 hover:bg-slate-800',
+                      ].join(' ')}
+                    >
+                      Tournament
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (gameMode === 'single') {
+                      setView('playing');
+                    } else if (gameMode === 'multiplayer') {
+                      if (room) {
+                        setView('lobby');
+                      } else {
+                        createRoom('lobby');
+                      }
+                    } else {
+                      if (room) {
+                        setView('lobby');
+                      } else {
+                        createRoom('tournament');
+                      }
+                    }
+                  }}
+                  className="w-full md:w-auto px-16 py-4 rounded-full bg-gradient-to-b from-emerald-400 to-emerald-600 text-black text-2xl font-black shadow-[0_14px_0_0_rgba(6,95,70,1),0_0_40px_rgba(34,197,94,0.8)] hover:translate-y-[2px] hover:shadow-[0_10px_0_0_rgba(6,95,70,1),0_0_30px_rgba(34,197,94,0.8)] transition-all flex items-center justify-center gap-3"
+                >
+                  <span>To battle!</span>
+                  <Gamepad2 className="w-7 h-7" />
+                </button>
+              </div>
+            </div>
+
+            <aside className="w-full lg:w-80 rounded-3xl bg-slate-950/80 border border-slate-700/70 p-5 flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Wallet className="w-5 h-5 text-emerald-300" />
+                  <span className="font-semibold text-sm">Lobby & invites</span>
+                </div>
+                {copied && (
+                  <span className="flex items-center gap-1 text-[10px] font-mono text-emerald-300">
+                    <Check className="w-3 h-3" />
+                    Copied
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-3 text-xs text-slate-300">
+                <button
+                  onClick={() => createRoom('lobby')}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/80 border border-slate-600/70 hover:border-sky-500/70 hover:bg-slate-900 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-sky-300" />
+                    <span>Create lobby</span>
+                  </div>
+                  <Crown className="w-4 h-4 text-amber-300" />
+                </button>
+
+                <button
+                  onClick={() => createRoom('tournament')}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/80 border border-slate-600/70 hover:border-amber-400/80 hover:bg-slate-900 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-amber-300" />
+                    <span>Host tournament</span>
+                  </div>
+                  <Coins className="w-4 h-4 text-amber-300" />
+                </button>
+
+                <div className="mt-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Copy className="w-4 h-4 text-cyan-300" />
+                    <span className="text-xs font-semibold text-slate-200">Join by invite code</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="6-digit code"
+                      maxLength={6}
+                      className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs font-mono"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const code = (e.target as HTMLInputElement).value;
+                          if (code.length === 6) {
+                            joinRoomByCode(undefined, code);
+                          }
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        const input = document.querySelector(
+                          'input[placeholder="6-digit code"]'
+                        ) as HTMLInputElement | null;
+                        if (input?.value.length === 6) {
+                          joinRoomByCode(undefined, input.value);
+                        }
+                      }}
+                      className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-xs font-bold"
+                    >
+                      Join
+                    </button>
+                  </div>
+                </div>
+
+                {room && (
+                  <div className="mt-3 p-3 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-2">
+                    <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                      <span>Active room</span>
+                      <span className="text-emerald-300">{room.mode}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-mono text-slate-200">{room.inviteCode}</span>
+                      <button
+                        onClick={copyInviteLink}
+                        className="flex items-center gap-1 px-2 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-[10px]"
+                      >
+                        <Copy className="w-3 h-3" />
+                        Copy link
+                      </button>
+                    </div>
+                    <button
+                      onClick={handleLeaveRoom}
+                      className="mt-2 w-full text-[11px] text-rose-300 underline underline-offset-2"
+                    >
+                      Leave room
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {address && (
+                <div className="mt-auto pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
+                  <div>
+                    <div className="font-semibold text-slate-100">
+                      {profile?.username || `Player${address.slice(0, 6)}`}
+                    </div>
+                    <div className="font-mono text-slate-500">
+                      {address.slice(0, 6)}...{address.slice(-4)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowWardrobe(true)}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-sky-900/80 border border-sky-500/70 text-[11px] font-semibold hover:bg-sky-800"
+                  >
+                    <Settings className="w-4 h-4 text-sky-300" />
+                    Worm wardrobe
+                  </button>
+                </div>
+              )}
+            </aside>
+          </main>
+        </div>
+      </div>
+
+      {showWardrobe && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#04132c]">
+          <div className="absolute inset-0 pointer-events-none opacity-40">
+            <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:18px_18px]" />
+            <div className="absolute inset-0 bg-gradient-to-b from-[#12346b] via-transparent to-[#020817]" />
+          </div>
+
+          <div className="relative z-10 w-full max-w-5xl h-[80vh] rounded-3xl border border-sky-600/70 bg-sky-950/90 shadow-[0_0_60px_rgba(56,189,248,0.8)] overflow-hidden flex">
+            <div className="flex flex-col justify-between w-16 bg-sky-900/80 border-r border-sky-700/80 py-4 items-center gap-3">
+              <button className="w-10 h-10 rounded-2xl bg-sky-800 flex items-center justify-center">
+                <Smile className="w-5 h-5 text-yellow-300" />
+              </button>
+              <button className="w-10 h-10 rounded-2xl bg-sky-800 flex items-center justify-center">
+                <Coins className="w-5 h-5 text-amber-300" />
+              </button>
+              <button className="w-10 h-10 rounded-2xl bg-sky-800 flex items-center justify-center">
+                <Wand2 className="w-5 h-5 text-purple-300" />
+              </button>
+              <button className="mt-auto w-10 h-10 rounded-2xl bg-sky-800 flex items-center justify-center">
+                <Settings className="w-5 h-5 text-sky-300" />
+              </button>
+            </div>
+
+            <div className="flex-1 flex flex-col">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-sky-700/70">
+                <div>
+                  <div className="text-2xl font-extrabold tracking-wide text-yellow-300 drop-shadow-[0_3px_0_rgba(0,0,0,0.7)]">
+                    Wardrobe
+                  </div>
+                  <div className="text-xs text-sky-100/70 uppercase tracking-[0.24em]">
+                    Customize your worm before battle
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-sky-900/80 border border-sky-500/70 text-xs">
+                    <Coins className="w-4 h-4 text-amber-300" />
+                    <span className="font-mono">{profile?.totalB21Earned ?? 0}</span>
+                  </div>
+                  <button
+                    onClick={() => setShowWardrobe(false)}
+                    className="w-9 h-9 rounded-full bg-sky-900/80 border border-sky-500/70 flex items-center justify-center hover:bg-sky-800"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 flex">
+                <div className="flex-1 flex flex-col items-center justify-center relative">
+                  <AnimatedSnake skin={activeSkin} length={24} interactive animated size={40} />
+                  <div className="mt-6 px-4 py-2 rounded-full bg-slate-950/80 border border-slate-700/80 text-xs text-slate-100 flex items-center gap-2">
+                    <span className="font-semibold">Selected skin:</span>
+                    <span className="capitalize text-emerald-300">{activeSkin}</span>
+                    <span className="text-slate-500">•</span>
+                    <span className="font-semibold">Face:</span>
+                    <span className="capitalize text-sky-300">{selectedFace.replace('-', ' ')}</span>
+                  </div>
+                </div>
+
+                <div className="w-72 border-l border-sky-700/70 bg-sky-950/90 px-5 py-4 flex flex-col gap-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <button
+                      onClick={() => setWardrobeTab('skins')}
+                      className={[
+                        'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-semibold border',
+                        wardrobeTab === 'skins'
+                          ? 'bg-emerald-400 text-black border-emerald-500'
+                          : 'bg-sky-900/80 border-sky-600 text-sky-100',
+                      ].join(' ')}
+                    >
+                      <Smile className="w-3 h-3" />
+                      Skins
+                    </button>
+                    <button
+                      onClick={() => setWardrobeTab('colors')}
+                      className={[
+                        'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-semibold border',
+                        wardrobeTab === 'colors'
+                          ? 'bg-sky-400 text-black border-sky-500'
+                          : 'bg-sky-900/80 border-sky-600 text-sky-100',
+                      ].join(' ')}
+                    >
+                      <Palette className="w-3 h-3" />
+                      Colors
+                    </button>
+                    <button
+                      onClick={() => setWardrobeTab('faces')}
+                      className={[
+                        'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-semibold border',
+                        wardrobeTab === 'faces'
+                          ? 'bg-purple-400 text-black border-purple-500'
+                          : 'bg-sky-900/80 border-sky-600 text-sky-100',
+                      ].join(' ')}
+                    >
+                      <Smile className="w-3 h-3" />
+                      Faces
+                    </button>
+                  </div>
+
+                  <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                    {wardrobeTab === 'skins' && (
+                      <>
+                        <div className="text-sm font-semibold text-sky-100 mb-1">Skins</div>
+                        <div className="grid grid-cols-2 gap-3">
+                          {skins.map((skin) => (
+                            <button
+                              key={skin}
+                              onClick={() => setActiveSkin(skin)}
+                              className={[
+                                'relative rounded-2xl border-2 p-2 flex flex-col items-center gap-2 bg-slate-950/80 transition-transform',
+                                activeSkin === skin
+                                  ? 'border-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.7)] scale-[1.03]'
+                                  : 'border-slate-700 hover:border-slate-500',
+                              ].join(' ')}
+                            >
+                              <div
+                                className={[
+                                  'w-full h-8 rounded-full bg-gradient-to-r',
+                                  skin === 'classic'
+                                    ? 'from-emerald-400 to-green-500'
+                                    : skin === 'neon'
+                                    ? 'from-cyan-400 to-blue-500'
+                                    : skin === 'shadow'
+                                    ? 'from-purple-400 to-indigo-500'
+                                    : skin === 'gold'
+                                    ? 'from-yellow-400 to-amber-500'
+                                    : skin === 'cyber'
+                                    ? 'from-pink-400 to-rose-500'
+                                    : skin === 'toxin'
+                                    ? 'from-lime-400 to-green-500'
+                                    : skin === 'crimson'
+                                    ? 'from-red-400 to-rose-500'
+                                    : 'from-slate-500 to-slate-800',
+                                ].join(' ')}
+                              />
+                              <span className="text-[11px] uppercase tracking-wide text-slate-200">
+                                {skin}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {wardrobeTab === 'colors' && (
+                      <>
+                        <div className="text-sm font-semibold text-sky-100 mb-1">Accent colors</div>
+                        <div className="grid grid-cols-5 gap-2">
+                          {[
+                            '#22c55e',
+                            '#0ea5e9',
+                            '#f97316',
+                            '#a855f7',
+                            '#e11d48',
+                            '#facc15',
+                            '#6366f1',
+                            '#14b8a6',
+                            '#ecfeff',
+                            '#f1f5f9',
+                          ].map((color) => (
+                            <div
+                              key={color}
+                              className="w-9 h-9 rounded-full border border-slate-600 shadow-md"
+                              style={{ backgroundColor: color }}
+                            />
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-2">
+                          Color presets layer on top of your selected skin for UI accents and trails.
+                        </p>
+                      </>
+                    )}
+
+                    {wardrobeTab === 'faces' && (
+                      <>
+                        <div className="text-sm font-semibold text-sky-100 mb-1">Faces</div>
+                        <div className="grid grid-cols-3 gap-2">
+                          {faceOptions.map((face) => (
+                            <button
+                              key={face}
+                              onClick={() => setSelectedFace(face)}
+                              className={[
+                                'aspect-square rounded-2xl border-2 bg-slate-950/90 flex items-center justify-center text-2xl',
+                                selectedFace === face
+                                  ? 'border-sky-400 shadow-[0_0_18px_rgba(56,189,248,0.8)]'
+                                  : 'border-slate-700 hover:border-slate-500',
+                              ].join(' ')}
+                            >
+                              {face === 'classic-eyes' && '👀'}
+                              {face === 'wide-eyes' && '😳'}
+                              {face === 'sleepy-eyes' && '😴'}
+                              {face === 'alien-eyes' && '👽'}
+                              {face === 'angry-eyes' && '😠'}
+                              {face === 'happy-eyes' && '😁'}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-2">
+                          Faces are visual only in this version and sync with your arena identity later.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-6 py-4 border-t border-sky-700/70 flex items-center justify-between bg-sky-950/95">
+                <div className="flex items-center gap-2 text-xs text-sky-100/80">
+                  <Wand2 className="w-4 h-4 text-emerald-300" />
+                  <span>Equip your look before heading back to the arena.</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setShowWardrobe(false)}
+                    className="px-4 py-2 rounded-full bg-slate-900/80 border border-slate-600/80 text-xs font-semibold hover:bg-slate-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => applySkin(activeSkin)}
+                    disabled={savingSkin}
+                    className="px-6 py-2 rounded-full bg-emerald-400 text-black text-xs font-black shadow-[0_6px_0_rgba(6,95,70,1)] hover:translate-y-[1px] hover:shadow-[0_4px_0_rgba(6,95,70,1)] disabled:opacity-60"
+                  >
+                    {savingSkin ? 'Saving...' : 'Use this look'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="absolute bottom-5 right-6 flex gap-3">
+              <button
+                onClick={() => setWardrobeTab('skins')}
+                className={[
+                  'flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold border',
+                  wardrobeTab === 'skins'
+                    ? 'bg-emerald-400 text-black border-emerald-500'
+                    : 'bg-sky-900/80 border-sky-600 text-sky-100',
+                ].join(' ')}
+              >
+                <Smile className="w-4 h-4" />
+                Skins
+              </button>
+              <button
+                onClick={() => setWardrobeTab('colors')}
+                className={[
+                  'flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold border',
+                  wardrobeTab === 'colors'
+                    ? 'bg-sky-400 text-black border-sky-500'
+                    : 'bg-sky-900/80 border-sky-600 text-sky-100',
+                ].join(' ')}
+              >
+                <Palette className="w-4 h-4" />
+                Colors
+              </button>
+              <button
+                onClick={() => setWardrobeTab('faces')}
+                className={[
+                  'flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold border',
+                  wardrobeTab === 'faces'
+                    ? 'bg-purple-400 text-black border-purple-500'
+                    : 'bg-sky-900/80 border-sky-600 text-sky-100',
+                ].join(' ')}
+              >
+                <Smile className="w-4 h-4" />
+                Faces
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

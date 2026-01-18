@@ -266,7 +266,6 @@ function GameLobby() {
 
   const handleGameOver = async (score: number) => {
     setLastScore(score);
-    setHasPaid(false);
     
     let reward = 0;
     if (score > 100) {

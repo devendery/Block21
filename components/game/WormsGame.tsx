@@ -6,7 +6,8 @@ import type { WormsMode } from '@/types/game';
 
 type Vector = { x: number; y: number };
 type Particle = { x: number; y: number; vx: number; vy: number; life: number; color: string };
-type Food = { x: number; y: number; radius: number; color: string; id: number };
+type FoodType = 'apple' | 'berry' | 'coin' | 'gem' | 'star' | 'heart' | 'diamond' | 'crystal';
+type Food = { x: number; y: number; radius: number; color: string; id: number; type: FoodType };
 type PowerUpType = 'magnet' | 'foodMultiplier' | 'deathRadar' | 'speed' | 'maneuver' | 'zoom';
 type PowerUp = { x: number; y: number; radius: number; color: string; id: number; type: PowerUpType };
 type DeathMark = { x: number; y: number; life: number };
@@ -57,6 +58,18 @@ const SKINS: Record<SkinId, { base: string; boost: string; shield: string }> = {
   toxin: { base: 'hsl(84, 81%, 59%)', boost: 'hsl(84, 90%, 68%)', shield: 'hsl(96, 100%, 80%)' },
   crimson: { base: 'hsl(0, 84%, 60%)', boost: 'hsl(0, 92%, 70%)', shield: 'hsl(0, 96%, 80%)' },
   void: { base: 'hsl(222, 47%, 11%)', boost: 'hsl(222, 47%, 20%)', shield: 'hsl(222, 70%, 30%)' },
+};
+
+const FOOD_TYPES: FoodType[] = ['apple', 'berry', 'coin', 'gem', 'star', 'heart', 'diamond', 'crystal'];
+const FOOD_COLORS: Record<FoodType, string> = {
+  apple: '#ff4444',
+  berry: '#ff88cc',
+  coin: '#ffd700',
+  gem: '#00ffff',
+  star: '#ffff00',
+  heart: '#ff69b4',
+  diamond: '#b9f2ff',
+  crystal: '#9370db',
 };
 
 const MODE_LABELS: Record<WormsMode, { short: string; full: string }> = {
@@ -112,7 +125,9 @@ type WormsGameProps = {
   onProgress?: (score: number) => void;
   playerName?: string;
   skinId?: SkinId;
-   mode?: WormsMode;
+  mode?: WormsMode;
+  multiplayer?: boolean;
+  roomId?: string;
 };
 
 export default function WormsGame({
@@ -120,7 +135,9 @@ export default function WormsGame({
   onProgress,
   playerName = 'Guest',
   skinId = 'classic',
-   mode = 'infinity',
+  mode = 'infinity',
+  multiplayer = false,
+  roomId,
 }: WormsGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -313,12 +330,14 @@ export default function WormsGame({
   };
 
   const spawnFood = () => {
+    const type = FOOD_TYPES[Math.floor(Math.random() * FOOD_TYPES.length)];
     foodRef.current.push({
       x: randomRange(50, ARENA_SIZE - 50),
       y: randomRange(50, ARENA_SIZE - 50),
       radius: randomRange(4, 8),
-      color: randomColor(),
+      color: FOOD_COLORS[type],
       id: Math.random(),
+      type,
     });
   };
 
@@ -551,7 +570,8 @@ export default function WormsGame({
                y: seg.y + randomRange(-5, 5),
                radius: randomRange(4, 8),
                color: bot.color,
-               id: Math.random()
+               id: Math.random(),
+               type: 'gem',
              });
           }
           createParticles(bot.head.x, bot.head.y, bot.color, 20);
