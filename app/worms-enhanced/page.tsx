@@ -6,26 +6,25 @@ import { useWallet } from '@/hooks/useWallet';
 import WormsGame from '@/components/game/WormsGame';
 import MultiplayerLobby from '@/components/game/MultiplayerLobby';
 import AnimatedSnake from '@/components/showcase/AnimatedSnake';
+import WardrobeModal from '@/components/game/ui/WardrobeModal';
+import GameOverModal from '@/components/game/ui/GameOverModal';
 import {
   Gamepad2,
   Trophy,
-  Users,
-  Play,
-  Settings,
-  Wallet,
-  Copy,
-  Check,
-  Crown,
   Zap,
   Coins,
   Smile,
-  Palette,
-  Wand2,
-  X,
-  Share2,
+  Settings,
+  Copy,
+  Check,
+  Crown,
+  Wallet,
+  Play,
+  Users,
 } from 'lucide-react';
 import type { GameRoom } from '@/lib/multiplayer';
-import { UserProfile, WormsMode } from '@/types/game';
+import { UserProfile, WormsMode, GameStats } from '@/types/game';
+import AdContainer from '@/components/ads/AdContainer';
 
 type GameView = 'menu' | 'lobby' | 'playing' | 'tournament';
 
@@ -40,7 +39,7 @@ export default function WormsEnhancedPage() {
   const [selectedMode, setSelectedMode] = useState<WormsMode>('infinity');
   const [copied, setCopied] = useState(false);
   const [showGameOver, setShowGameOver] = useState(false);
-  const [lastScore, setLastScore] = useState<number | null>(null);
+  const [lastStats, setLastStats] = useState<GameStats | null>(null);
   const [showWardrobe, setShowWardrobe] = useState(false);
   const [wardrobeTab, setWardrobeTab] = useState<'skins' | 'colors' | 'faces'>('skins');
   const [activeSkin, setActiveSkin] = useState<string>('classic');
@@ -284,120 +283,40 @@ export default function WormsEnhancedPage() {
   if (view === 'playing') {
     return (
       <div className="fixed inset-0 z-50 bg-black">
-        {showGameOver && lastScore !== null ? (
-          <div className="flex items-center justify-center w-full h-full px-4">
-            <div className="w-full max-w-xl rounded-[32px] bg-slate-950/95 border border-sky-600/70 px-8 py-6 shadow-[0_0_60px_rgba(56,189,248,0.8)]">
-              <div className="flex items-center justify-between mb-4">
-                <div className="text-xs font-semibold tracking-[0.3em] uppercase text-sky-300">
-                  Result
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowGameOver(false);
-                    setLastScore(null);
-                    if (room) {
-                      setView('lobby');
-                    } else {
-                      setView('menu');
-                    }
-                  }}
-                  className="w-9 h-9 rounded-full bg-slate-900/80 border border-slate-600 flex items-center justify-center text-slate-300 hover:bg-slate-800"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="flex flex-col items-center mb-4">
-                <div className="relative w-28 h-28 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 shadow-[0_0_40px_rgba(250,204,21,0.75)] flex items-center justify-center">
-                  <Trophy className="w-14 h-14 text-amber-950 drop-shadow-[0_4px_0_rgba(0,0,0,0.4)]" />
-                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-slate-950/90 border border-amber-300 text-xs font-black text-amber-100 font-mono">
-                    {lastScore}
-                  </div>
-                </div>
-                <div className="mt-4 text-[13px] text-sky-100/80">
-                  Great run,{' '}
-                  <span className="font-semibold">
-                    {profile?.username || `Player${address?.slice(0, 6) || ''}`}
-                  </span>
-                  .
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-sky-100">
-                <div className="rounded-2xl bg-slate-900/80 border border-slate-700 px-4 py-3">
-                  <div className="text-[11px] text-sky-400 uppercase tracking-[0.2em]">
-                    Collected
-                  </div>
-                  <div className="mt-1 flex items-baseline gap-1">
-                    <Coins className="w-4 h-4 text-amber-300" />
-                    <span className="font-mono text-lg">
-                      {Math.max(0, Math.floor(lastScore / 10))}
-                    </span>
-                    <span className="text-[11px] text-slate-400">coins</span>
-                  </div>
-                </div>
-                <div className="rounded-2xl bg-slate-900/80 border border-slate-700 px-4 py-3">
-                  <div className="text-[11px] text-sky-400 uppercase tracking-[0.2em]">
-                    Lifetime
-                  </div>
-                  <div className="mt-1 flex items-baseline gap-1">
-                    <span className="font-mono text-lg">
-                      {Math.max(6, Math.floor(lastScore / 25))}s
-                    </span>
-                    <span className="text-[11px] text-slate-400">in arena</span>
-                  </div>
-                </div>
-                <div className="rounded-2xl bg-slate-900/80 border border-slate-700 px-4 py-3">
-                  <div className="text-[11px] text-sky-400 uppercase tracking-[0.2em]">
-                    Defeated
-                  </div>
-                  <div className="mt-1 flex items-baseline gap-1">
-                    <span className="font-mono text-lg">
-                      {Math.floor(lastScore / 120)}
-                    </span>
-                    <span className="text-[11px] text-slate-400">worms</span>
-                  </div>
-                </div>
-                <div className="rounded-2xl bg-slate-900/80 border border-slate-700 px-4 py-3">
-                  <div className="text-[11px] text-sky-400 uppercase tracking-[0.2em]">
-                    Experience
-                  </div>
-                  <div className="mt-1 flex items-baseline gap-1">
-                    <span className="font-mono text-lg">
-                      {Math.floor(lastScore / 5)}
-                    </span>
-                    <span className="text-[11px] text-slate-400">xp</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-slate-900/90 border border-slate-600 text-[13px] font-semibold text-sky-100 hover:bg-slate-800"
-                >
-                  <Share2 className="w-4 h-4 text-sky-300" />
-                  Share run
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowGameOver(false);
-                    setLastScore(null);
-                  }}
-                  className="inline-flex items-center gap-3 px-8 py-3 rounded-full bg-emerald-400 text-black text-sm font-black shadow-[0_10px_0_rgba(6,95,70,1)] hover:translate-y-[2px] hover:shadow-[0_6px_0_rgba(6,95,70,1)] transition-all"
-                >
-                  <Play className="w-5 h-5" />
-                  Restart
-                </button>
-              </div>
-            </div>
-          </div>
+        {showGameOver && lastStats !== null ? (
+          <GameOverModal
+            stats={lastStats}
+            profile={profile}
+            address={address}
+            onRestart={() => {
+              setShowGameOver(false);
+              setLastStats(null);
+            }}
+            onClose={() => {
+              setShowGameOver(false);
+              setLastStats(null);
+              if (room) {
+                setView('lobby');
+              } else {
+                setView('menu');
+              }
+            }}
+          />
         ) : (
           <WormsGame
-            onGameOver={(score) => {
-              setLastScore(score);
+            onGameOver={(stats) => {
+              if (typeof stats === 'number') {
+                // Handle legacy case if necessary, though we updated WormsGame
+                setLastStats({
+                  score: stats,
+                  collected: Math.floor(stats / 10),
+                  defeated: 0,
+                  experience: Math.floor(stats / 5),
+                  lifetime: 0
+                });
+              } else {
+                setLastStats(stats);
+              }
               setShowGameOver(true);
               if (room) {
                 handleRoomUpdate({ status: 'finished' });
@@ -654,6 +573,15 @@ export default function WormsEnhancedPage() {
                 )}
               </div>
 
+              <div className="mt-4">
+                <AdContainer 
+                  slot="SIDEBAR_AD_SLOT" 
+                  format="rectangle"
+                  className="w-full"
+                  label="Sponsored"
+                />
+              </div>
+
               {address && (
                 <div className="mt-auto pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
                   <div>
@@ -680,273 +608,25 @@ export default function WormsEnhancedPage() {
       </div>
 
       {showWardrobe && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#04132c]">
-          <div className="absolute inset-0 pointer-events-none opacity-40">
-            <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:18px_18px]" />
-            <div className="absolute inset-0 bg-gradient-to-b from-[#12346b] via-transparent to-[#020817]" />
-          </div>
+        <WardrobeModal
+          profile={profile}
+          activeSkin={activeSkin}
+          selectedFace={selectedFace}
+          wardrobeTab={wardrobeTab}
+          setActiveSkin={setActiveSkin}
+          setSelectedFace={setSelectedFace}
+          setWardrobeTab={setWardrobeTab}
+          onClose={() => setShowWardrobe(false)}
+        />
+      )}
 
-          <div className="relative z-10 w-full max-w-5xl h-[80vh] rounded-3xl border border-sky-600/70 bg-sky-950/90 shadow-[0_0_60px_rgba(56,189,248,0.8)] overflow-hidden flex">
-            <div className="flex flex-col justify-between w-16 bg-sky-900/80 border-r border-sky-700/80 py-4 items-center gap-3">
-              <button className="w-10 h-10 rounded-2xl bg-sky-800 flex items-center justify-center">
-                <Smile className="w-5 h-5 text-yellow-300" />
-              </button>
-              <button className="w-10 h-10 rounded-2xl bg-sky-800 flex items-center justify-center">
-                <Coins className="w-5 h-5 text-amber-300" />
-              </button>
-              <button className="w-10 h-10 rounded-2xl bg-sky-800 flex items-center justify-center">
-                <Wand2 className="w-5 h-5 text-purple-300" />
-              </button>
-              <button className="mt-auto w-10 h-10 rounded-2xl bg-sky-800 flex items-center justify-center">
-                <Settings className="w-5 h-5 text-sky-300" />
-              </button>
-            </div>
-
-            <div className="flex-1 flex flex-col">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-sky-700/70">
-                <div>
-                  <div className="text-2xl font-extrabold tracking-wide text-yellow-300 drop-shadow-[0_3px_0_rgba(0,0,0,0.7)]">
-                    Wardrobe
-                  </div>
-                  <div className="text-xs text-sky-100/70 uppercase tracking-[0.24em]">
-                    Customize your worm before battle
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-sky-900/80 border border-sky-500/70 text-xs">
-                    <Coins className="w-4 h-4 text-amber-300" />
-                    <span className="font-mono">{profile?.totalB21Earned ?? 0}</span>
-                  </div>
-                  <button
-                    onClick={() => setShowWardrobe(false)}
-                    className="w-9 h-9 rounded-full bg-sky-900/80 border border-sky-500/70 flex items-center justify-center hover:bg-sky-800"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 flex">
-                <div className="flex-1 flex flex-col items-center justify-center relative">
-                  <AnimatedSnake skin={activeSkin} length={24} interactive animated size={40} />
-                  <div className="mt-6 px-4 py-2 rounded-full bg-slate-950/80 border border-slate-700/80 text-xs text-slate-100 flex items-center gap-2">
-                    <span className="font-semibold">Selected skin:</span>
-                    <span className="capitalize text-emerald-300">{activeSkin}</span>
-                    <span className="text-slate-500">•</span>
-                    <span className="font-semibold">Face:</span>
-                    <span className="capitalize text-sky-300">{selectedFace.replace('-', ' ')}</span>
-                  </div>
-                </div>
-
-                <div className="w-72 border-l border-sky-700/70 bg-sky-950/90 px-5 py-4 flex flex-col gap-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <button
-                      onClick={() => setWardrobeTab('skins')}
-                      className={[
-                        'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-semibold border',
-                        wardrobeTab === 'skins'
-                          ? 'bg-emerald-400 text-black border-emerald-500'
-                          : 'bg-sky-900/80 border-sky-600 text-sky-100',
-                      ].join(' ')}
-                    >
-                      <Smile className="w-3 h-3" />
-                      Skins
-                    </button>
-                    <button
-                      onClick={() => setWardrobeTab('colors')}
-                      className={[
-                        'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-semibold border',
-                        wardrobeTab === 'colors'
-                          ? 'bg-sky-400 text-black border-sky-500'
-                          : 'bg-sky-900/80 border-sky-600 text-sky-100',
-                      ].join(' ')}
-                    >
-                      <Palette className="w-3 h-3" />
-                      Colors
-                    </button>
-                    <button
-                      onClick={() => setWardrobeTab('faces')}
-                      className={[
-                        'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-semibold border',
-                        wardrobeTab === 'faces'
-                          ? 'bg-purple-400 text-black border-purple-500'
-                          : 'bg-sky-900/80 border-sky-600 text-sky-100',
-                      ].join(' ')}
-                    >
-                      <Smile className="w-3 h-3" />
-                      Faces
-                    </button>
-                  </div>
-
-                  <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-                    {wardrobeTab === 'skins' && (
-                      <>
-                        <div className="text-sm font-semibold text-sky-100 mb-1">Skins</div>
-                        <div className="grid grid-cols-2 gap-3">
-                          {skins.map((skin) => (
-                            <button
-                              key={skin}
-                              onClick={() => setActiveSkin(skin)}
-                              className={[
-                                'relative rounded-2xl border-2 p-2 flex flex-col items-center gap-2 bg-slate-950/80 transition-transform',
-                                activeSkin === skin
-                                  ? 'border-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.7)] scale-[1.03]'
-                                  : 'border-slate-700 hover:border-slate-500',
-                              ].join(' ')}
-                            >
-                              <div
-                                className={[
-                                  'w-full h-8 rounded-full bg-gradient-to-r',
-                                  skin === 'classic'
-                                    ? 'from-emerald-400 to-green-500'
-                                    : skin === 'neon'
-                                    ? 'from-cyan-400 to-blue-500'
-                                    : skin === 'shadow'
-                                    ? 'from-purple-400 to-indigo-500'
-                                    : skin === 'gold'
-                                    ? 'from-yellow-400 to-amber-500'
-                                    : skin === 'cyber'
-                                    ? 'from-pink-400 to-rose-500'
-                                    : skin === 'toxin'
-                                    ? 'from-lime-400 to-green-500'
-                                    : skin === 'crimson'
-                                    ? 'from-red-400 to-rose-500'
-                                    : 'from-slate-500 to-slate-800',
-                                ].join(' ')}
-                              />
-                              <span className="text-[11px] uppercase tracking-wide text-slate-200">
-                                {skin}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-
-                    {wardrobeTab === 'colors' && (
-                      <>
-                        <div className="text-sm font-semibold text-sky-100 mb-1">Accent colors</div>
-                        <div className="grid grid-cols-5 gap-2">
-                          {[
-                            '#22c55e',
-                            '#0ea5e9',
-                            '#f97316',
-                            '#a855f7',
-                            '#e11d48',
-                            '#facc15',
-                            '#6366f1',
-                            '#14b8a6',
-                            '#ecfeff',
-                            '#f1f5f9',
-                          ].map((color) => (
-                            <div
-                              key={color}
-                              className="w-9 h-9 rounded-full border border-slate-600 shadow-md"
-                              style={{ backgroundColor: color }}
-                            />
-                          ))}
-                        </div>
-                        <p className="text-[11px] text-slate-400 mt-2">
-                          Color presets layer on top of your selected skin for UI accents and trails.
-                        </p>
-                      </>
-                    )}
-
-                    {wardrobeTab === 'faces' && (
-                      <>
-                        <div className="text-sm font-semibold text-sky-100 mb-1">Faces</div>
-                        <div className="grid grid-cols-3 gap-2">
-                          {faceOptions.map((face) => (
-                            <button
-                              key={face}
-                              onClick={() => setSelectedFace(face)}
-                              className={[
-                                'aspect-square rounded-2xl border-2 bg-slate-950/90 flex items-center justify-center text-2xl',
-                                selectedFace === face
-                                  ? 'border-sky-400 shadow-[0_0_18px_rgba(56,189,248,0.8)]'
-                                  : 'border-slate-700 hover:border-slate-500',
-                              ].join(' ')}
-                            >
-                              {face === 'classic-eyes' && '👀'}
-                              {face === 'wide-eyes' && '😳'}
-                              {face === 'sleepy-eyes' && '😴'}
-                              {face === 'alien-eyes' && '👽'}
-                              {face === 'angry-eyes' && '😠'}
-                              {face === 'happy-eyes' && '😁'}
-                            </button>
-                          ))}
-                        </div>
-                        <p className="text-[11px] text-slate-400 mt-2">
-                          Faces are visual only in this version and sync with your arena identity later.
-                        </p>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-6 py-4 border-t border-sky-700/70 flex items-center justify-between bg-sky-950/95">
-                <div className="flex items-center gap-2 text-xs text-sky-100/80">
-                  <Wand2 className="w-4 h-4 text-emerald-300" />
-                  <span>Equip your look before heading back to the arena.</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setShowWardrobe(false)}
-                    className="px-4 py-2 rounded-full bg-slate-900/80 border border-slate-600/80 text-xs font-semibold hover:bg-slate-800"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => applySkin(activeSkin)}
-                    disabled={savingSkin}
-                    className="px-6 py-2 rounded-full bg-emerald-400 text-black text-xs font-black shadow-[0_6px_0_rgba(6,95,70,1)] hover:translate-y-[1px] hover:shadow-[0_4px_0_rgba(6,95,70,1)] disabled:opacity-60"
-                  >
-                    {savingSkin ? 'Saving...' : 'Use this look'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="absolute bottom-5 right-6 flex gap-3">
-              <button
-                onClick={() => setWardrobeTab('skins')}
-                className={[
-                  'flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold border',
-                  wardrobeTab === 'skins'
-                    ? 'bg-emerald-400 text-black border-emerald-500'
-                    : 'bg-sky-900/80 border-sky-600 text-sky-100',
-                ].join(' ')}
-              >
-                <Smile className="w-4 h-4" />
-                Skins
-              </button>
-              <button
-                onClick={() => setWardrobeTab('colors')}
-                className={[
-                  'flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold border',
-                  wardrobeTab === 'colors'
-                    ? 'bg-sky-400 text-black border-sky-500'
-                    : 'bg-sky-900/80 border-sky-600 text-sky-100',
-                ].join(' ')}
-              >
-                <Palette className="w-4 h-4" />
-                Colors
-              </button>
-              <button
-                onClick={() => setWardrobeTab('faces')}
-                className={[
-                  'flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold border',
-                  wardrobeTab === 'faces'
-                    ? 'bg-purple-400 text-black border-purple-500'
-                    : 'bg-sky-900/80 border-sky-600 text-sky-100',
-                ].join(' ')}
-              >
-                <Smile className="w-4 h-4" />
-                Faces
-              </button>
-            </div>
-          </div>
+      {view === 'menu' && (
+        <div className="max-w-4xl mx-auto mt-8 mb-8 px-4">
+           <AdContainer 
+             slot="BOTTOM_BANNER_AD_SLOT" 
+             format="horizontal"
+             label="Advertisement"
+           />
         </div>
       )}
     </div>

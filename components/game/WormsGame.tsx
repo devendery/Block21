@@ -2,87 +2,47 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Play, RefreshCw, Zap, MousePointer2, Settings, X, Timer } from 'lucide-react';
-import type { WormsMode } from '@/types/game';
+import type { WormsMode, FoodType, PowerUpType, SkinId, Vector, Particle, Food, PowerUp, DeathMark, GameStats } from '@/types/game';
+import { 
+  GAME_CONFIG, 
+  POWERUP_TYPES, 
+  POWERUP_COLORS, 
+  POWERUP_LABELS, 
+  SKINS, 
+  FOOD_TYPES, 
+  FOOD_COLORS, 
+  FOOD_EMOJIS,
+  MODE_LABELS, 
+  MODE_COLORS 
+} from '@/lib/gameConfig';
+import { gameSocket, PlayerMove } from '@/lib/websocket';
 
-type Vector = { x: number; y: number };
-type Particle = { x: number; y: number; vx: number; vy: number; life: number; color: string };
-type FoodType = 'apple' | 'berry' | 'coin' | 'gem' | 'star' | 'heart' | 'diamond' | 'crystal';
-type Food = { x: number; y: number; radius: number; color: string; id: number; type: FoodType };
-type PowerUpType = 'magnet' | 'foodMultiplier' | 'deathRadar' | 'speed' | 'maneuver' | 'zoom';
-type PowerUp = { x: number; y: number; radius: number; color: string; id: number; type: PowerUpType };
-type DeathMark = { x: number; y: number; life: number };
-type SkinId = 'classic' | 'neon' | 'shadow' | 'gold' | 'cyber' | 'toxin' | 'crimson' | 'void';
-
-const ARENA_SIZE = 3000;
-const INITIAL_LENGTH = 20;
-const SEGMENT_DIST = 8;
-const BASE_SPEED = 4;
-const BOOST_SPEED = 7;
-const TURN_SPEED = 0.3;
-const BOT_TURN_SPEED = 0.15;
-const FOOD_COUNT = 250;
-const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 1.2;
-const ZOOM_PER_SEGMENT = 0.002;
-const POWERUP_COUNT = 8;
-const POWERUP_SCORE_MULTIPLIER = 5;
-const POWERUP_DURATION_TICKS = 60 * 8;
-const FOLLOW_STRENGTH = 0.28;
-const BOT_COUNT = 15;
-const TIME_ATTACK_DURATION_SECONDS = 300;
-const TREASURE_HUNT_DURATION_SECONDS = 180;
-const POWERUP_TYPES: PowerUpType[] = ['magnet', 'foodMultiplier', 'deathRadar', 'speed', 'maneuver', 'zoom'];
-const POWERUP_COLORS: Record<PowerUpType, string> = {
-  magnet: '#ef4444',
-  foodMultiplier: '#3b82f6',
-  deathRadar: '#a855f7',
-  speed: '#22c55e',
-  maneuver: '#22c55e',
-  zoom: '#facc15',
-};
-const POWERUP_LABELS: Record<PowerUpType, string> = {
-  magnet: 'Magnet',
-  foodMultiplier: 'x5 Food',
-  deathRadar: 'Death Radar',
-  speed: 'Speed Boost',
-  maneuver: 'Maneuver',
-  zoom: 'Zoom Out',
-};
-
-const SKINS: Record<SkinId, { base: string; boost: string; shield: string }> = {
-  classic: { base: 'hsl(142, 72%, 45%)', boost: 'hsl(142, 90%, 60%)', shield: 'hsl(160, 95%, 70%)' },
-  neon: { base: 'hsl(187, 92%, 49%)', boost: 'hsl(187, 100%, 65%)', shield: 'hsl(196, 100%, 80%)' },
-  shadow: { base: 'hsl(239, 84%, 67%)', boost: 'hsl(262, 84%, 70%)', shield: 'hsl(262, 100%, 82%)' },
-  gold: { base: 'hsl(47, 96%, 57%)', boost: 'hsl(47, 100%, 70%)', shield: 'hsl(52, 100%, 80%)' },
-  cyber: { base: 'hsl(330, 81%, 60%)', boost: 'hsl(330, 90%, 70%)', shield: 'hsl(330, 100%, 82%)' },
-  toxin: { base: 'hsl(84, 81%, 59%)', boost: 'hsl(84, 90%, 68%)', shield: 'hsl(96, 100%, 80%)' },
-  crimson: { base: 'hsl(0, 84%, 60%)', boost: 'hsl(0, 92%, 70%)', shield: 'hsl(0, 96%, 80%)' },
-  void: { base: 'hsl(222, 47%, 11%)', boost: 'hsl(222, 47%, 20%)', shield: 'hsl(222, 70%, 30%)' },
-};
-
-const FOOD_TYPES: FoodType[] = ['apple', 'berry', 'coin', 'gem', 'star', 'heart', 'diamond', 'crystal'];
-const FOOD_COLORS: Record<FoodType, string> = {
-  apple: '#ff4444',
-  berry: '#ff88cc',
-  coin: '#ffd700',
-  gem: '#00ffff',
-  star: '#ffff00',
-  heart: '#ff69b4',
-  diamond: '#b9f2ff',
-  crystal: '#9370db',
-};
-
-const MODE_LABELS: Record<WormsMode, { short: string; full: string }> = {
-  infinity: { short: 'INF', full: 'Infinity Run' },
-  time: { short: 'TIME', full: 'Time Assault' },
-  treasure: { short: 'TRE', full: 'Treasure Hunt' },
-};
-
-const MODE_COLORS: Record<WormsMode, { panel: string; border: string }> = {
-  infinity: { panel: 'bg-slate-900/70 text-sky-100', border: 'border-sky-400/70' },
-  time: { panel: 'bg-violet-900/70 text-violet-100', border: 'border-violet-400/70' },
-  treasure: { panel: 'bg-amber-900/70 text-amber-100', border: 'border-amber-400/70' },
-};
+  const { 
+  ARENA_SIZE, 
+  INITIAL_LENGTH, 
+  SEGMENT_DIST, 
+  BASE_SPEED, 
+  MIN_SPEED,
+  BOOST_SPEED_MULTIPLIER,
+  TURN_SPEED, 
+  BOT_TURN_SPEED, 
+  FOOD_COUNT, 
+  MIN_FOOD_RADIUS,
+  MAX_FOOD_RADIUS,
+  MIN_ZOOM, 
+  MAX_ZOOM, 
+  ZOOM_PER_SEGMENT, 
+  POWERUP_COUNT, 
+  POWERUP_SCORE_MULTIPLIER, 
+  POWERUP_DURATION_TICKS, 
+  FOLLOW_STRENGTH, 
+  BOT_COUNT, 
+  TIME_ATTACK_DURATION_SECONDS, 
+  TREASURE_HUNT_DURATION_SECONDS,
+  B21_DECIMALS,
+  FOOD_VALUE_B21,
+  BOOST_DRAIN_BASE
+} = GAME_CONFIG;
 
 const randomRange = (min: number, max: number) => Math.random() * (max - min) + min;
 const randomColor = () => `hsl(${Math.random() * 360}, 70%, 60%)`;
@@ -121,8 +81,8 @@ type WormEntity = {
 };
 
 type WormsGameProps = {
-  onGameOver?: (score: number) => void;
-  onProgress?: (score: number) => void;
+  onGameOver?: (stats: GameStats | number) => void;
+  onProgress?: (progress: number) => void;
   playerName?: string;
   skinId?: SkinId;
   mode?: WormsMode;
@@ -182,6 +142,9 @@ export default function WormsGame({
   const ticksRef = useRef(0);
   const lastSecondRef = useRef(0);
 
+  // Remote players for multiplayer
+  const remotePlayersRef = useRef<Map<string, PlayerMove>>(new Map());
+
   const resolvedSkin = SKINS[skinId] || SKINS.classic;
 
   useEffect(() => {
@@ -196,6 +159,58 @@ export default function WormsGame({
     handleResize();
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Multiplayer connection effect
+  useEffect(() => {
+    if (!multiplayer || !roomId) return;
+
+    const connect = async () => {
+      // Connect to server
+      await gameSocket.connect(roomId, wormRef.current.id);
+
+      // Listen for updates
+      gameSocket.on('player-joined', (data: any) => {
+        console.log('Player joined:', data);
+      });
+
+      gameSocket.on('player-left', (data: { playerId: string }) => {
+        if (data?.playerId) {
+          remotePlayersRef.current.delete(data.playerId);
+        }
+      });
+
+      gameSocket.on('player-moved', (move: PlayerMove) => {
+        // Don't update self
+        if (move && move.playerId && move.playerId !== wormRef.current.id) {
+          remotePlayersRef.current.set(move.playerId, move);
+        }
+      });
+
+      gameSocket.on('game-state', (state: any) => {
+        if (!state) return;
+        
+        // Sync full state if needed
+        if (Array.isArray(state.players)) {
+          state.players.forEach((p: PlayerMove) => {
+            if (p && p.playerId !== wormRef.current.id) {
+              remotePlayersRef.current.set(p.playerId, p);
+            }
+          });
+        }
+        if (state.food) {
+          // Merge server food with local if needed, or replace
+          // For now, let's just add missing ones to avoid flickering
+        }
+      });
+    };
+
+    connect();
+
+    return () => {
+      gameSocket.disconnect();
+      remotePlayersRef.current.clear();
+    };
+  }, [multiplayer, roomId]);
 
   useEffect(() => {
     if (!isPlaying && !gameOver) {
@@ -301,10 +316,7 @@ export default function WormsGame({
       spawnBot();
     }
 
-    foodRef.current = [];
-    for (let i = 0; i < FOOD_COUNT; i++) {
-      spawnFood();
-    }
+    foodRef.current = spawnFood(FOOD_COUNT);
 
     powerUpsRef.current = [];
     for (let i = 0; i < POWERUP_COUNT; i++) {
@@ -325,20 +337,61 @@ export default function WormsGame({
     }
 
     setScore(0);
+    collectedRef.current = 0;
+    defeatedRef.current = 0;
+    experienceRef.current = 0;
     setGameOver(false);
     setIsPlaying(true);
   };
 
-  const spawnFood = () => {
-    const type = FOOD_TYPES[Math.floor(Math.random() * FOOD_TYPES.length)];
-    foodRef.current.push({
-      x: randomRange(50, ARENA_SIZE - 50),
-      y: randomRange(50, ARENA_SIZE - 50),
-      radius: randomRange(4, 8),
-      color: FOOD_COLORS[type],
-      id: Math.random(),
-      type,
-    });
+  // Calculate dynamic game state
+  const totalMass = useRef(0);
+  const currentArenaSize = useRef(ARENA_SIZE);
+  
+  // Stats for game over screen
+  const collectedRef = useRef(0);
+  const defeatedRef = useRef(0);
+  const experienceRef = useRef(0);
+
+  // Helper to get current speed based on mass
+  const getSpeed = (mass: number) => {
+    // Speed = max(1.6 , 4.2 - log10(balance+1 ))
+    // Here mass is roughly equivalent to segments, we can treat it as balance proxy
+    const speed = Math.max(MIN_SPEED, BASE_SPEED - Math.log10(mass + 1));
+    return speed;
+  };
+
+  const spawnFood = (count: number, center?: Vector, radius?: number) => {
+    const newFood: Food[] = [];
+    for (let i = 0; i < count; i++) {
+      let x, y;
+      if (center && radius) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * radius;
+        x = center.x + Math.cos(angle) * dist;
+        y = center.y + Math.sin(angle) * dist;
+      } else {
+        // Spawn within dynamic map bounds
+        const bounds = currentArenaSize.current / 2;
+        x = randomRange(-bounds + 50, bounds - 50);
+        y = randomRange(-bounds + 50, bounds - 50);
+      }
+
+      const type = FOOD_TYPES[Math.floor(Math.random() * FOOD_TYPES.length)];
+      // Food unit system: 1 food = 0.00000001 B21
+      // Bigger food = more mass/value
+      const sizeMultiplier = (type === 'coin' || type === 'gem') ? 1.5 : 1.0;
+      
+      newFood.push({
+        x,
+        y,
+        radius: randomRange(MIN_FOOD_RADIUS, MAX_FOOD_RADIUS) * sizeMultiplier,
+        color: FOOD_COLORS[type],
+        id: Math.random(),
+        type,
+      });
+    }
+    return newFood;
   };
 
   const spawnPowerUp = () => {
@@ -521,8 +574,8 @@ export default function WormsGame({
       const maneuverTicks = activeMap.maneuver || 0;
       const speedMultiplier = speedTicks > 0 ? 1.4 : 1;
       const maneuverMultiplier = maneuverTicks > 0 ? 1.3 : 1;
-      const baseSpeed = BASE_SPEED * speedMultiplier;
-      const boostSpeed = BOOST_SPEED * speedMultiplier;
+      const baseSpeed = getSpeed(player.body.length) * speedMultiplier;
+      const boostSpeed = (baseSpeed * BOOST_SPEED_MULTIPLIER);
       
       let targetAngle = player.angle;
 
@@ -560,7 +613,8 @@ export default function WormsGame({
       for (let i = botsRef.current.length - 1; i >= 0; i--) {
         const bot = botsRef.current[i];
         const botTarget = turnBotToFood(bot);
-        updateWormPos(bot, botTarget, BOT_TURN_SPEED, BASE_SPEED, BOOST_SPEED);
+        const botBaseSpeed = getSpeed(bot.body.length);
+        updateWormPos(bot, botTarget, BOT_TURN_SPEED, botBaseSpeed, botBaseSpeed * BOOST_SPEED_MULTIPLIER);
         
         if (checkCollisions(bot)) {
           for (let j = 0; j < bot.body.length; j += 2) {
@@ -580,6 +634,7 @@ export default function WormsGame({
             y: bot.head.y,
             life: 1,
           });
+          defeatedRef.current += 1; // Count as defeated
           botsRef.current.splice(i, 1);
           spawnBot();
         }
@@ -613,6 +668,7 @@ export default function WormsGame({
                 const basePoints = 10;
                 const multiplier = foodMultiplierActive ? POWERUP_SCORE_MULTIPLIER : 1;
                 setScore(s => s + basePoints * multiplier);
+                collectedRef.current += 1;
              }
              eaten = true;
              break;
@@ -621,7 +677,7 @@ export default function WormsGame({
         
         if (eaten) {
           foodRef.current.splice(i, 1);
-          spawnFood();
+          foodRef.current.push(...spawnFood(1));
         }
       }
 
@@ -686,6 +742,18 @@ export default function WormsGame({
       if (zoomActive && zoom > MIN_ZOOM) {
         zoom = Math.max(MIN_ZOOM, zoom * 0.8);
       }
+      // Send multiplayer updates
+      if (multiplayer && isPlaying && ticksRef.current % 3 === 0) {
+        gameSocket.sendPlayerMove({
+          playerId: wormRef.current.id,
+          x: wormRef.current.head.x,
+          y: wormRef.current.head.y,
+          angle: wormRef.current.angle,
+          body: wormRef.current.body,
+          score: score
+        });
+      }
+
       const targetCamX = player.head.x - canvas.width / 2;
       const targetCamY = player.head.y - canvas.height / 2;
       
@@ -763,12 +831,43 @@ export default function WormsGame({
       }
 
       foodRef.current.forEach(f => {
-        ctx.beginPath();
-        ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
-        ctx.fillStyle = f.color;
-        ctx.shadowBlur = 10;
+        // Glow effect for food
+        ctx.shadowBlur = 15;
         ctx.shadowColor = f.color;
-        ctx.fill();
+        
+        // Draw Emoji
+        ctx.font = `${f.radius * 2}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Check if emoji exists, otherwise fallback to circle
+        const emoji = FOOD_EMOJIS[f.type];
+        
+        if (emoji) {
+          ctx.shadowBlur = 0; // Clear shadow for crisp emoji
+          // Draw glow circle behind emoji for better visibility
+          ctx.beginPath();
+          ctx.arc(f.x, f.y, f.radius * 0.8, 0, Math.PI * 2);
+          
+          ctx.globalAlpha = 0.25;
+          ctx.fillStyle = f.color;
+          ctx.fill();
+          ctx.globalAlpha = 1.0;
+
+          ctx.fillStyle = f.color;
+          ctx.fillText(
+            emoji,
+            f.x,
+            f.y + (f.radius * 0.1) // Slight vertical adjustment
+          );
+        } else {
+          // Fallback to neon circle
+          ctx.beginPath();
+          ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
+          ctx.fillStyle = f.color;
+          ctx.fill();
+        }
+        
         ctx.shadowBlur = 0;
       });
 
@@ -847,6 +946,100 @@ export default function WormsGame({
         ctx.textBaseline = 'bottom';
         ctx.fillText(w.name, w.head.x, w.head.y - 24);
       };
+
+      // Draw remote players
+    if (multiplayer) {
+      remotePlayersRef.current.forEach((remotePlayer) => {
+        if (!remotePlayer || !remotePlayer.playerId || !remotePlayer.body) return;
+        
+        // Use a consistent skin color based on player ID hash or metadata
+        // For now, let's pick a random skin from our presets based on ID char
+        const skinKeys = Object.keys(SKINS) as SkinId[];
+        const charCode = remotePlayer.playerId.charCodeAt(0) || 0;
+        const skinIndex = charCode % skinKeys.length;
+        const skin = SKINS[skinKeys[skinIndex]];
+        
+        // Draw Body
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = skin.base;
+          
+          // Draw segments from tail to head
+          for (let i = remotePlayer.body.length - 1; i >= 0; i--) {
+            const segment = remotePlayer.body[i];
+            const size = 10; // Base size
+            
+            ctx.fillStyle = i % 2 === 0 ? skin.base : adjustColor(skin.base, -10);
+            ctx.beginPath();
+            ctx.arc(
+              (segment.x - cameraRef.current.x) * zoom,
+              (segment.y - cameraRef.current.y) * zoom,
+              size * zoom,
+              0,
+              Math.PI * 2
+            );
+            ctx.fill();
+          }
+
+          // Draw Head
+          const headX = (remotePlayer.x - cameraRef.current.x) * zoom;
+          const headY = (remotePlayer.y - cameraRef.current.y) * zoom;
+          const headSize = 12 * zoom;
+
+          // Head glow
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = skin.boost;
+          
+          ctx.fillStyle = skin.base;
+          ctx.beginPath();
+          ctx.arc(headX, headY, headSize, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Eyes
+          const eyeOffset = 4 * zoom;
+          const eyeSize = 3 * zoom;
+          const angle = remotePlayer.angle;
+
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowBlur = 0;
+          
+          // Left Eye
+          ctx.beginPath();
+          ctx.arc(
+            headX + Math.cos(angle - 0.5) * eyeOffset,
+            headY + Math.sin(angle - 0.5) * eyeOffset,
+            eyeSize,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+
+          // Right Eye
+          ctx.beginPath();
+          ctx.arc(
+            headX + Math.cos(angle + 0.5) * eyeOffset,
+            headY + Math.sin(angle + 0.5) * eyeOffset,
+            eyeSize,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+
+          // Name Tag
+          ctx.shadowBlur = 4;
+          ctx.shadowColor = 'black';
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `bold ${12 * zoom}px monospace`;
+          ctx.textAlign = 'center';
+          ctx.fillText(
+            remotePlayer.playerId.slice(0, 6),
+            headX,
+            headY - 20 * zoom
+          );
+          
+          // Reset shadow
+          ctx.shadowBlur = 0;
+        });
+      }
 
       botsRef.current.forEach(bot => drawWorm(bot));
 
@@ -930,7 +1123,18 @@ export default function WormsGame({
     setGameOver(true);
     setIsPlaying(false);
     if (score > highScore) setHighScore(score);
-    if (onGameOverProp) onGameOverProp(score);
+    
+    // Pass detailed stats to parent
+    if (onGameOverProp) {
+      const stats: GameStats = {
+        score,
+        collected: collectedRef.current,
+        defeated: defeatedRef.current,
+        experience: Math.floor(score / 5), // Simple XP formula
+        lifetime: Math.floor(ticksRef.current / 60), // Assuming 60fps
+      };
+      onGameOverProp(stats);
+    }
     if (onProgress) onProgress(score);
   };
 
