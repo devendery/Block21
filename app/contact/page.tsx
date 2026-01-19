@@ -65,7 +65,7 @@ export default function ContactPage() {
             {/* Contact Form (Visual Only for AdSense compliance, avoids backend complexity) */}
             <div className="glass-panel p-8">
                 <h2 className="text-2xl font-heading font-bold text-white mb-6">Send a Message</h2>
-                <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+                <form className="space-y-4">
                     <div>
                         <label htmlFor="name" className="block text-sm font-medium text-gray-400 mb-1">Name</label>
                         <input 
@@ -105,7 +105,7 @@ export default function ContactPage() {
                             placeholder="How can we help?"
                         />
                     </div>
-                    <button className="w-full bg-primary hover:bg-primary/90 text-black font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
+                    <button type="button" className="w-full bg-primary hover:bg-primary/90 text-black font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
                         <Send className="w-4 h-4" />
                         Send Message
                     </button>

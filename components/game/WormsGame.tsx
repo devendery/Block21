@@ -690,8 +690,18 @@ export default function WormsGame({
         }
       }
 
-      // 3. Rotation Physics
-      updateWormPos(player, targetAngle, playerPhysics.turnSpeed * maneuverMultiplier, currentMoveSpeed, dt);
+      // 3. Rotation Physics (Enhanced Elasticity)
+      // We use a spring-like smoothing for the angle
+      const angleDiff = targetAngle - player.angle;
+      let normalizedDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
+      
+      // Dynamic turn speed based on size (already in playerPhysics.turnSpeed)
+      // We add a momentum factor for "drift" feel
+      const turnFactor = Math.min(1, playerPhysics.turnSpeed * maneuverMultiplier * 60 * dt);
+      player.angle += normalizedDiff * turnFactor;
+
+      // Move head - utilize the helper but skip rotation by passing current angle
+      updateWormPos(player, player.angle, 1.0, currentMoveSpeed, dt);
 
       if (checkCollisions(player, playerPhysics.thickness)) {
         deathMarksRef.current.push({
@@ -901,9 +911,12 @@ export default function WormsGame({
       ctx.lineWidth = 10;
       ctx.strokeRect(0, 0, ARENA_SIZE, ARENA_SIZE);
 
-      // Draw Grid
+      // Draw Grid with Glow
+      ctx.shadowBlur = 5;
+      ctx.shadowColor = 'rgba(56, 189, 248, 0.3)';
       ctx.strokeStyle = '#1e293b';
       ctx.lineWidth = 2;
+
       const gridSize = 100;
       
       // Optimize grid drawing: only draw visible lines
@@ -925,7 +938,10 @@ export default function WormsGame({
       for (let y = startY; y <= endY; y += gridSize) {
         ctx.moveTo(startX, y); ctx.lineTo(endX, y);
       }
+      // Draw Grid (End)
       ctx.stroke();
+      ctx.shadowBlur = 0; // Reset shadow
+
 
       if (deathRadarActive) {
         deathMarksRef.current.forEach(m => {
@@ -1331,6 +1347,8 @@ export default function WormsGame({
     0
   );
 
+  const leaderboardWorms = [...chartEntries].sort((a, b) => (b.length || 0) - (a.length || 0)).slice(0, 5);
+
   return (
     <div
       ref={containerRef}
@@ -1371,80 +1389,37 @@ export default function WormsGame({
         </div>
       </div>
 
-      <div className="absolute top-4 right-4 px-4 py-3 bg-black/55 backdrop-blur rounded-2xl border border-white/10 text-white text-xs sm:text-sm w-80 max-w-[85vw]">
-        <div className="font-semibold mb-1">Leaderboard</div>
-        <div className="flex justify-between gap-4">
-          <span>{playerName}</span>
-          <span className="font-mono">{score}</span>
-        </div>
-        <div className="flex justify-between gap-4 text-white/60 mt-1">
-          <span>Best Run</span>
-          <span className="font-mono">{highScore}</span>
-        </div>
-        {activePowerUpsList.length > 0 && (
-          <div className="mt-2 text-xs text-amber-300 space-y-1">
-            {activePowerUpsList.map((type) => (
-              <div key={type} className="flex items-center justify-between gap-2">
-                <span>{POWERUP_LABELS[type]}</span>
-                <span className="font-mono text-[10px]">
-                  {Math.ceil(((activePowerUpsRef.current[type] || 0) / 60))}s
-                </span>
-              </div>
-            ))}
+      <div className="absolute top-4 right-4 flex flex-col gap-2 pointer-events-none">
+          <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-xl p-3 min-w-[200px]">
+             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Leaderboard</h3>
+             <div className="space-y-1.5">
+               {leaderboardWorms.map((entry, idx) => (
+                 <div key={entry.id} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                       <span className={`w-4 text-center font-mono ${idx < 3 ? 'text-yellow-400' : 'text-slate-500'}`}>#{idx + 1}</span>
+                       <span className={entry.isPlayer ? 'text-emerald-300 font-bold' : 'text-slate-300'}>
+                         {entry.name}
+                       </span>
+                    </div>
+                    <span className="font-mono text-slate-400">{Math.floor(entry.length)}</span>
+                 </div>
+               ))}
+             </div>
           </div>
-        )}
-        {chartWorms.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-white/10">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-semibold tracking-[0.24em] uppercase text-slate-300">
-                Size Ladder
-              </span>
-              <span className="text-[10px] text-slate-500">
-                Mass by food
-              </span>
-            </div>
-            <div className="space-y-1.5">
-              {chartWorms.map((entry, index) => {
-                const ratio = maxConsumption > 0 ? entry.consumption / maxConsumption : 0;
-                const width = 35 + ratio * 65;
-                const thickness = 12 + ratio * 18;
-                const isPlayer = entry.isPlayer;
-                const barColor = isPlayer ? resolvedSkin.base : 'rgba(148,163,184,1)';
-                const label = isPlayer ? 'You' : entry.name;
+          
+          {/* Active Powerups Indicator */}
+          {activePowerUpsList.length > 0 && (
+             <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-xl p-3">
+                {activePowerUpsList.map(type => (
+                   <div key={type} className="flex items-center justify-between text-xs gap-3 mb-1 last:mb-0">
+                      <span style={{ color: POWERUP_COLORS[type] }} className="font-bold">{POWERUP_LABELS[type]}</span>
+                      <span className="font-mono text-white">{Math.ceil((activePowerUpsRef.current[type] || 0) / 60)}s</span>
+                   </div>
+                ))}
+             </div>
+          )}
+        </div>
 
-                return (
-                  <div key={entry.id} className="flex items-center gap-2">
-                    <div className="w-4 text-[10px] text-slate-500 font-mono text-right">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <div
-                        className="relative rounded-full bg-slate-900/70 border border-slate-700/80 overflow-hidden"
-                        style={{ height: thickness }}
-                      >
-                        <div
-                          className="absolute inset-y-[2px] left-[2px] rounded-full shadow-[0_0_18px_rgba(52,211,153,0.6)]"
-                          style={{
-                            width: `${width}%`,
-                            background: barColor,
-                            opacity: isPlayer ? 1 : 0.9,
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div className="w-20 text-[10px] text-right text-slate-200 truncate">
-                      {label}
-                    </div>
-                    <div className="w-12 text-[10px] font-mono text-right text-emerald-300">
-                      {entry.consumption}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
 
       <div className="absolute bottom-4 left-4 text-white/50 text-sm pointer-events-none hidden md:block">
         <div className="flex items-center gap-2">

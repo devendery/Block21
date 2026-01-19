@@ -1,5 +1,5 @@
 import React from 'react';
-import { Smile, Coins, Wand2, Settings, X, Palette } from 'lucide-react';
+import { Smile, Coins, Wand2, Settings, X, Palette, Eye } from 'lucide-react';
 import AnimatedSnake from '@/components/showcase/AnimatedSnake';
 import { UserProfile } from '@/types/game';
 
@@ -35,229 +35,188 @@ export default function WardrobeModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#04132c]">
-      <div className="absolute inset-0 pointer-events-none opacity-40">
-        <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:18px_18px]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#12346b] via-transparent to-[#020817]" />
-      </div>
-
-      <div className="relative z-10 w-full max-w-5xl h-[80vh] rounded-3xl border border-sky-600/70 bg-sky-950/90 shadow-[0_0_60px_rgba(56,189,248,0.8)] overflow-hidden flex">
-        <div className="flex flex-col justify-between w-16 bg-sky-900/80 border-r border-sky-700/80 py-4 items-center gap-3">
-          <button className="w-10 h-10 rounded-2xl bg-sky-800 flex items-center justify-center">
-            <Smile className="w-5 h-5 text-yellow-300" />
-          </button>
-          <button className="w-10 h-10 rounded-2xl bg-sky-800 flex items-center justify-center">
-            <Coins className="w-5 h-5 text-amber-300" />
-          </button>
-          <button className="w-10 h-10 rounded-2xl bg-sky-800 flex items-center justify-center">
-            <Wand2 className="w-5 h-5 text-purple-300" />
-          </button>
-          <button className="mt-auto w-10 h-10 rounded-2xl bg-sky-800 flex items-center justify-center">
-            <Settings className="w-5 h-5 text-sky-300" />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+      <div className="relative z-10 w-full max-w-5xl h-[85vh] rounded-[32px] border border-sky-600/70 bg-sky-950/95 shadow-[0_0_80px_rgba(56,189,248,0.4)] overflow-hidden flex flex-col md:flex-row">
+        
+        {/* Sidebar Tabs */}
+        <div className="flex md:flex-col justify-between w-full md:w-20 bg-sky-900/40 border-b md:border-b-0 md:border-r border-sky-700/50 p-2 md:py-6 items-center gap-2">
+          <div className="flex md:flex-col gap-2 w-full md:w-auto justify-center">
+            <button 
+              onClick={() => setWardrobeTab('skins')}
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${wardrobeTab === 'skins' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'bg-sky-900/50 text-sky-300 hover:bg-sky-800'}`}
+            >
+              <Smile className="w-6 h-6" />
+            </button>
+            <button 
+              onClick={() => setWardrobeTab('colors')}
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${wardrobeTab === 'colors' ? 'bg-sky-500 text-black shadow-lg shadow-sky-500/20' : 'bg-sky-900/50 text-sky-300 hover:bg-sky-800'}`}
+            >
+              <Palette className="w-6 h-6" />
+            </button>
+            <button 
+              onClick={() => setWardrobeTab('faces')}
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${wardrobeTab === 'faces' ? 'bg-purple-500 text-black shadow-lg shadow-purple-500/20' : 'bg-sky-900/50 text-sky-300 hover:bg-sky-800'}`}
+            >
+              <Eye className="w-6 h-6" />
+            </button>
+          </div>
+          
+          <button 
+            onClick={onClose}
+            className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 hover:bg-rose-500 hover:text-white transition-all ml-auto md:ml-0 md:mt-auto"
+          >
+            <X className="w-6 h-6" />
           </button>
         </div>
 
-        <div className="flex-1 flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-sky-700/70">
+        <div className="flex-1 flex flex-col h-full overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-8 py-5 border-b border-sky-700/30">
             <div>
-              <div className="text-2xl font-extrabold tracking-wide text-yellow-300 drop-shadow-[0_3px_0_rgba(0,0,0,0.7)]">
-                Wardrobe
+              <div className="text-3xl font-black tracking-tight text-white flex items-center gap-3">
+                WARDROBE
+                <span className="text-xs font-mono font-normal px-2 py-1 rounded bg-sky-900/50 text-sky-300 border border-sky-700/50">
+                  BETA
+                </span>
               </div>
-              <div className="text-xs text-sky-100/70 uppercase tracking-[0.24em]">
-                Customize your worm before battle
+              <div className="text-xs text-sky-200/60 font-mono mt-1">
+                CUSTOMIZE YOUR BATTLE IDENTITY
               </div>
             </div>
+            
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-sky-900/80 border border-sky-500/70 text-xs">
-                <Coins className="w-4 h-4 text-amber-300" />
-                <span className="font-mono">{profile?.totalB21Earned ?? 0}</span>
-              </div>
-              <button
-                onClick={onClose}
-                className="w-9 h-9 rounded-full bg-sky-900/80 border border-sky-500/70 flex items-center justify-center hover:bg-sky-800"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex-1 flex">
-            <div className="flex-1 flex flex-col items-center justify-center relative">
-              <AnimatedSnake skin={activeSkin} length={24} interactive animated size={40} />
-              <div className="mt-6 px-4 py-2 rounded-full bg-slate-950/80 border border-slate-700/80 text-xs text-slate-100 flex items-center gap-2">
-                <span className="font-semibold">Selected skin:</span>
-                <span className="capitalize text-emerald-300">{activeSkin}</span>
-                <span className="text-slate-500">•</span>
-                <span className="font-semibold">Face:</span>
-                <span className="capitalize text-sky-300">{selectedFace.replace('-', ' ')}</span>
-              </div>
-            </div>
-
-            <div className="w-72 border-l border-sky-700/70 bg-sky-950/90 px-5 py-4 flex flex-col gap-4">
-              <div className="flex items-center gap-2 mb-1">
-                <button
-                  onClick={() => setWardrobeTab('skins')}
-                  className={[
-                    'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-semibold border',
-                    wardrobeTab === 'skins'
-                      ? 'bg-emerald-400 text-black border-emerald-500'
-                      : 'bg-sky-900/80 border-sky-600 text-sky-100',
-                  ].join(' ')}
-                >
-                  <Smile className="w-3 h-3" />
-                  Skins
-                </button>
-                <button
-                  onClick={() => setWardrobeTab('colors')}
-                  className={[
-                    'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-semibold border',
-                    wardrobeTab === 'colors'
-                      ? 'bg-sky-400 text-black border-sky-500'
-                      : 'bg-sky-900/80 border-sky-600 text-sky-100',
-                  ].join(' ')}
-                >
-                  <Palette className="w-3 h-3" />
-                  Colors
-                </button>
-                <button
-                  onClick={() => setWardrobeTab('faces')}
-                  className={[
-                    'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-semibold border',
-                    wardrobeTab === 'faces'
-                      ? 'bg-purple-400 text-black border-purple-500'
-                      : 'bg-sky-900/80 border-sky-600 text-sky-100',
-                  ].join(' ')}
-                >
-                  <Smile className="w-3 h-3" />
-                  Faces
-                </button>
-              </div>
-
-              <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-                {wardrobeTab === 'skins' && (
-                  <>
-                    <div className="text-sm font-semibold text-sky-100 mb-1">Skins</div>
-                    <div className="grid grid-cols-2 gap-3">
-                      {skins.map((skin) => (
-                        <button
-                          key={skin}
-                          onClick={() => setActiveSkin(skin)}
-                          className={[
-                            'relative rounded-2xl border-2 p-2 flex flex-col items-center gap-2 bg-slate-950/80 transition-transform',
-                            activeSkin === skin
-                              ? 'border-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.7)] scale-[1.03]'
-                              : 'border-slate-700 hover:border-slate-500',
-                          ].join(' ')}
-                        >
-                          <div
-                            className={[
-                              'w-full h-8 rounded-full bg-gradient-to-r',
-                              skin === 'classic'
-                                ? 'from-emerald-400 to-green-500'
-                                : skin === 'neon'
-                                ? 'from-cyan-400 to-blue-500'
-                                : skin === 'shadow'
-                                ? 'from-purple-400 to-indigo-500'
-                                : skin === 'gold'
-                                ? 'from-yellow-400 to-amber-500'
-                                : skin === 'cyber'
-                                ? 'from-pink-400 to-rose-500'
-                                : skin === 'toxin'
-                                ? 'from-lime-400 to-green-500'
-                                : skin === 'crimson'
-                                ? 'from-red-400 to-rose-500'
-                                : 'from-slate-500 to-slate-800',
-                            ].join(' ')}
-                          />
-                          <span className="text-[11px] uppercase tracking-wide text-slate-200">
-                            {skin}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-
-                {wardrobeTab === 'colors' && (
-                  <>
-                    <div className="text-sm font-semibold text-sky-100 mb-1">Accent colors</div>
-                    <div className="grid grid-cols-5 gap-2">
-                      {[
-                        '#22c55e',
-                        '#0ea5e9',
-                        '#f97316',
-                        '#a855f7',
-                        '#e11d48',
-                        '#facc15',
-                        '#6366f1',
-                        '#14b8a6',
-                        '#ecfeff',
-                        '#f1f5f9',
-                      ].map((color) => (
-                        <div
-                          key={color}
-                          className="w-9 h-9 rounded-full border border-slate-600 shadow-md"
-                          style={{ backgroundColor: color }}
-                        />
-                      ))}
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-2">
-                      Color presets layer on top of your selected skin for UI accents and trails.
-                    </p>
-                  </>
-                )}
-
-                {wardrobeTab === 'faces' && (
-                  <>
-                    <div className="text-sm font-semibold text-sky-100 mb-1">Faces</div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {faceOptions.map((face) => (
-                        <button
-                          key={face}
-                          onClick={() => setSelectedFace(face)}
-                          className={[
-                            'aspect-square rounded-2xl border-2 bg-slate-950/90 flex items-center justify-center text-2xl',
-                            selectedFace === face
-                              ? 'border-sky-400 shadow-[0_0_18px_rgba(56,189,248,0.8)]'
-                              : 'border-slate-700 hover:border-slate-500',
-                          ].join(' ')}
-                        >
-                          {face === 'classic-eyes' && '👀'}
-                          {face === 'wide-eyes' && '😳'}
-                          {face === 'sleepy-eyes' && '😴'}
-                          {face === 'alien-eyes' && '👽'}
-                          {face === 'angry-eyes' && '😠'}
-                          {face === 'happy-eyes' && '😁'}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-2">
-                      Faces are visual only in this version and sync with your arena identity later.
-                    </p>
-                  </>
-                )}
+              <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-sm font-bold text-amber-400">
+                <Coins className="w-4 h-4" />
+                <span>{profile?.totalB21Earned ?? 0} B21</span>
               </div>
             </div>
           </div>
 
-          <div className="px-6 py-4 border-t border-sky-700/70 flex items-center justify-between bg-sky-950/95">
-            <div className="flex items-center gap-2 text-xs text-sky-100/80">
-              <Wand2 className="w-4 h-4 text-emerald-300" />
-              <span>Equip your look before heading back to the arena.</span>
+          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+            {/* Live Preview Area */}
+            <div className="flex-1 relative bg-gradient-to-br from-slate-900 to-slate-950 flex flex-col items-center justify-center p-8 overflow-hidden">
+              {/* Background Grid */}
+              <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(#38bdf8 1px, transparent 1px), linear-gradient(90deg, #38bdf8 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+              <div className="absolute inset-0 bg-radial-gradient from-transparent to-slate-950 opacity-80" />
+              
+              <div className="relative z-10 w-full h-full flex items-center justify-center">
+                <AnimatedSnake skin={activeSkin} length={30} interactive animated size={55} />
+              </div>
+
+              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-3 rounded-full bg-slate-900/80 backdrop-blur border border-slate-700 shadow-xl">
+                <div className="flex flex-col items-center">
+                  <span className="text-[10px] uppercase text-slate-500 tracking-wider font-bold">Skin</span>
+                  <span className="text-sm font-bold text-emerald-400 capitalize">{activeSkin}</span>
+                </div>
+                <div className="w-px h-8 bg-slate-700" />
+                <div className="flex flex-col items-center">
+                  <span className="text-[10px] uppercase text-slate-500 tracking-wider font-bold">Eyes</span>
+                  <span className="text-sm font-bold text-sky-400 capitalize">{selectedFace.replace('-', ' ')}</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 rounded-full bg-slate-900/80 border border-slate-600/80 text-xs font-semibold hover:bg-slate-800"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={onClose}
-                className="px-6 py-2 rounded-full bg-emerald-500 text-black text-xs font-bold shadow-[0_0_20px_rgba(16,185,129,0.5)] hover:bg-emerald-400"
-              >
-                Use this look
-              </button>
+
+            {/* Selection Panel */}
+            <div className="w-full lg:w-96 border-t lg:border-t-0 lg:border-l border-sky-700/30 bg-sky-950/50 backdrop-blur-sm p-6 flex flex-col gap-6 overflow-y-auto">
+              
+              {wardrobeTab === 'skins' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-sky-100 uppercase tracking-wider">Available Skins</h3>
+                    <span className="text-xs text-sky-400">{skins.length} items</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    {skins.map((skin) => (
+                      <button
+                        key={skin}
+                        onClick={() => setActiveSkin(skin)}
+                        className={`group relative aspect-[4/3] rounded-2xl border-2 flex flex-col items-center justify-center gap-3 transition-all overflow-hidden ${
+                          activeSkin === skin
+                            ? 'border-emerald-400 bg-emerald-900/20 shadow-[0_0_20px_rgba(52,211,153,0.3)]'
+                            : 'border-slate-700 bg-slate-900/50 hover:border-sky-500/50 hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className={`w-16 h-16 rounded-full bg-gradient-to-br shadow-lg group-hover:scale-110 transition-transform duration-300 ${
+                          skin === 'classic' ? 'from-emerald-400 to-green-600' :
+                          skin === 'neon' ? 'from-cyan-400 to-blue-600' :
+                          skin === 'shadow' ? 'from-purple-500 to-slate-900' :
+                          skin === 'gold' ? 'from-yellow-300 to-amber-600' :
+                          skin === 'cyber' ? 'from-pink-500 to-rose-600' :
+                          skin === 'toxin' ? 'from-lime-400 to-green-700' :
+                          skin === 'crimson' ? 'from-red-500 to-orange-700' :
+                          'from-gray-200 to-slate-500'
+                        }`} />
+                        <span className="text-xs font-bold uppercase tracking-wide text-slate-300 group-hover:text-white">
+                          {skin}
+                        </span>
+                        {activeSkin === skin && (
+                          <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,1)]" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {wardrobeTab === 'colors' && (
+                <div className="space-y-4">
+                  <h3 className="text-sm font-bold text-sky-100 uppercase tracking-wider">Accent Colors</h3>
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      '#22c55e', '#0ea5e9', '#f97316', '#a855f7',
+                      '#e11d48', '#facc15', '#6366f1', '#14b8a6',
+                      '#ecfeff', '#f1f5f9', '#1e293b', '#fbbf24'
+                    ].map((color) => (
+                      <button
+                        key={color}
+                        className="aspect-square rounded-2xl border-2 border-slate-700 hover:border-white transition-all shadow-lg hover:scale-105"
+                        style={{ backgroundColor: color }}
+                        onClick={() => {}} // Placeholder for actual color logic if needed
+                      />
+                    ))}
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                    Accent colors modify your trail, UI highlights, and particle effects in the arena.
+                  </p>
+                </div>
+              )}
+
+              {wardrobeTab === 'faces' && (
+                <div className="space-y-4">
+                  <h3 className="text-sm font-bold text-sky-100 uppercase tracking-wider">Expressions</h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    {faceOptions.map((face) => (
+                      <button
+                        key={face}
+                        onClick={() => setSelectedFace(face)}
+                        className={`aspect-square rounded-2xl border-2 flex items-center justify-center text-3xl transition-all ${
+                          selectedFace === face
+                            ? 'border-sky-400 bg-sky-900/30 shadow-[0_0_15px_rgba(56,189,248,0.3)]'
+                            : 'border-slate-700 bg-slate-900/50 hover:border-slate-500 hover:bg-slate-800'
+                        }`}
+                      >
+                        {face === 'classic-eyes' && '👀'}
+                        {face === 'wide-eyes' && '😳'}
+                        {face === 'sleepy-eyes' && '😴'}
+                        {face === 'alien-eyes' && '👽'}
+                        {face === 'angry-eyes' && '😠'}
+                        {face === 'happy-eyes' && '😁'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-auto pt-6">
+                <button
+                  onClick={onClose}
+                  className="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-black tracking-wide shadow-lg shadow-emerald-900/50 hover:shadow-emerald-900/80 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                >
+                  <Wand2 className="w-5 h-5" />
+                  EQUIP & CLOSE
+                </button>
+              </div>
             </div>
           </div>
         </div>
