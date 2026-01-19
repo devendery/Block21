@@ -26,6 +26,9 @@ export const metadata: Metadata = {
     shortcut: '/images/logo-obsidian-sovereign.svg',
     apple: '/images/logo-obsidian-sovereign.svg',
   },
+  other: {
+    'google-adsense-account': 'ca-pub-2028888236344019',
+  },
 };
 
 export default function RootLayout({
