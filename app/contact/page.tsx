@@ -1,10 +1,6 @@
-import type { Metadata } from 'next';
-import { Mail, MessageSquare, MapPin, Send } from 'lucide-react';
+'use client';
 
-export const metadata: Metadata = {
-  title: 'Contact Us - Block21',
-  description: 'Get in touch with the Block21 team for support, partnerships, or inquiries.',
-};
+import { Mail, MessageSquare, MapPin, Send } from 'lucide-react';
 
 export default function ContactPage() {
   return (
@@ -65,7 +61,7 @@ export default function ContactPage() {
             {/* Contact Form (Visual Only for AdSense compliance, avoids backend complexity) */}
             <div className="glass-panel p-8">
                 <h2 className="text-2xl font-heading font-bold text-white mb-6">Send a Message</h2>
-                <form className="space-y-4">
+                <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
                     <div>
                         <label htmlFor="name" className="block text-sm font-medium text-gray-400 mb-1">Name</label>
                         <input 
