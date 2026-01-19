@@ -76,10 +76,10 @@ export default function Footer() {
                 <h4 className="font-heading font-bold text-white mb-6">Platform</h4>
                 <ul className="space-y-4 text-sm text-gray-400">
                     <li><Link href="/" className="hover:text-primary transition-colors">Homepage</Link></li>
+                    <li><Link href="/about" className="hover:text-primary transition-colors">About Us</Link></li>
+                    <li><Link href="/contact" className="hover:text-primary transition-colors">Contact</Link></li>
                     <li><Link href="/market" className="hover:text-primary transition-colors">Market</Link></li>
-                    <li><Link href="/release-policy" className="hover:text-primary transition-colors">Release Policy</Link></li>
                     <li><Link href="/roadmap" className="hover:text-primary transition-colors">Roadmap</Link></li>
-                    <li><Link href="/tokenomics" className="hover:text-primary transition-colors">Tokenomics</Link></li>
                     <li><Link href="/transparency" className="hover:text-primary transition-colors">Transparency</Link></li>
                 </ul>
             </div>

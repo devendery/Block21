@@ -37,76 +37,46 @@ export default function GameOverModal({
           </div>
 
           {/* Trophy + score */}
-          <div className="flex flex-col items-center mb-6">
-            <div className="relative w-24 h-24 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 shadow-[0_0_40px_rgba(250,204,21,0.75)] flex items-center justify-center">
-              <Trophy className="w-12 h-12 text-amber-950 drop-shadow-[0_4px_0_rgba(0,0,0,0.4)]" />
-              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-slate-950/90 border border-amber-300 text-xs font-black text-amber-100 font-mono">
+          <div className="flex flex-col items-center mb-4">
+            <div className="relative w-20 h-20 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 shadow-[0_0_30px_rgba(250,204,21,0.6)] flex items-center justify-center">
+              <Trophy className="w-10 h-10 text-amber-950 drop-shadow-[0_2px_0_rgba(0,0,0,0.4)]" />
+              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-slate-950/90 border border-amber-300 text-[10px] font-black text-amber-100 font-mono">
                 {stats.score}
               </div>
             </div>
-            <div className="mt-3 text-xs text-sky-100/80">
-              Great run,{' '}
-              <span className="font-semibold">
-                {profile?.username || `Player${address?.slice(0, 6) || ''}`}
-              </span>
-              .
+            <div className="mt-2 text-[10px] text-sky-100/80">
+              Great run, <span className="font-semibold">{profile?.username || `Player${address?.slice(0, 6) || ''}`}</span>
             </div>
           </div>
 
-          {/* Stats row (4 cards) */}
-          <div className="grid grid-cols-2 gap-3 text-sm text-sky-100">
-            <div className="rounded-xl bg-slate-900/80 border border-slate-700 px-3 py-2">
-              <div className="text-[10px] text-sky-400 uppercase tracking-[0.2em]">
-                Collected
-              </div>
-              <div className="mt-0.5 flex items-baseline gap-1">
-                <Coins className="w-3.5 h-3.5 text-amber-300" />
-                <span className="font-mono text-base">
-                  {stats.collected}
-                </span>
-                <span className="text-[10px] text-slate-400">items</span>
+          {/* Stats row (4 cards) - Horizontal Scroll on very small screens or 4 cols */}
+          <div className="grid grid-cols-4 gap-2 text-sm text-sky-100 mb-4">
+            <div className="col-span-2 sm:col-span-1 rounded-lg bg-slate-900/80 border border-slate-700 px-2 py-2 flex flex-col items-center text-center">
+              <div className="text-[9px] text-sky-400 uppercase tracking-wider">Collected</div>
+              <div className="mt-0.5 flex items-center gap-1">
+                <Coins className="w-3 h-3 text-amber-300" />
+                <span className="font-mono text-sm">{stats.collected}</span>
               </div>
             </div>
 
-            <div className="rounded-xl bg-slate-900/80 border border-slate-700 px-3 py-2">
-              <div className="text-[10px] text-sky-400 uppercase tracking-[0.2em]">
-                Lifetime
-              </div>
-              <div className="mt-0.5 flex items-baseline gap-1">
-                <span className="font-mono text-base">
-                  {stats.lifetime}s
-                </span>
-                <span className="text-[10px] text-slate-400">in arena</span>
-              </div>
+            <div className="col-span-2 sm:col-span-1 rounded-lg bg-slate-900/80 border border-slate-700 px-2 py-2 flex flex-col items-center text-center">
+              <div className="text-[9px] text-sky-400 uppercase tracking-wider">Time</div>
+              <div className="mt-0.5 font-mono text-sm">{stats.lifetime}s</div>
             </div>
 
-            <div className="rounded-xl bg-slate-900/80 border border-slate-700 px-3 py-2">
-              <div className="text-[10px] text-sky-400 uppercase tracking-[0.2em]">
-                Defeated
-              </div>
-              <div className="mt-0.5 flex items-baseline gap-1">
-                <span className="font-mono text-base">
-                  {stats.defeated}
-                </span>
-                <span className="text-[10px] text-slate-400">worms</span>
-              </div>
+            <div className="col-span-2 sm:col-span-1 rounded-lg bg-slate-900/80 border border-slate-700 px-2 py-2 flex flex-col items-center text-center">
+              <div className="text-[9px] text-sky-400 uppercase tracking-wider">Kills</div>
+              <div className="mt-0.5 font-mono text-sm">{stats.defeated}</div>
             </div>
 
-            <div className="rounded-xl bg-slate-900/80 border border-slate-700 px-3 py-2">
-              <div className="text-[10px] text-sky-400 uppercase tracking-[0.2em]">
-                Experience
-              </div>
-              <div className="mt-0.5 flex items-baseline gap-1">
-                <span className="font-mono text-base">
-                  {stats.experience}
-                </span>
-                <span className="text-[10px] text-slate-400">xp</span>
-              </div>
+            <div className="col-span-2 sm:col-span-1 rounded-lg bg-slate-900/80 border border-slate-700 px-2 py-2 flex flex-col items-center text-center">
+              <div className="text-[9px] text-sky-400 uppercase tracking-wider">XP</div>
+              <div className="mt-0.5 font-mono text-sm">{stats.experience}</div>
             </div>
           </div>
 
-          {/* Ad Placement */}
-          <div className="mt-4 flex justify-center w-full min-h-[250px] bg-slate-900/30 rounded-xl overflow-hidden">
+          {/* Ad Placement - Compact */}
+          <div className="mb-4 flex justify-center w-full bg-slate-900/30 rounded-lg overflow-hidden py-1">
             <div className="scale-90 origin-center">
               <AdContainer 
                 slot="GAMEOVER_SQUARE_AD" 
