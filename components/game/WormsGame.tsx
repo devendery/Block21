@@ -139,6 +139,7 @@ export default function WormsGame({
   const powerUpsRef = useRef<PowerUp[]>([]);
   const activePowerUpsRef = useRef<Partial<Record<PowerUpType, number>>>({});
   const deathMarksRef = useRef<DeathMark[]>([]);
+  const scoreRef = useRef(0);
   const ticksRef = useRef(0);
   const lastSecondRef = useRef(0);
 
@@ -324,6 +325,8 @@ export default function WormsGame({
     }
     activePowerUpsRef.current = {};
     deathMarksRef.current = [];
+    scoreRef.current = 0;
+    setScore(0);
 
     ticksRef.current = 0;
     lastSecondRef.current = 0;
@@ -546,6 +549,37 @@ export default function WormsGame({
       // This is handled by targetLength in the main update loop now
     };
 
+    const handleWormDeath = (worm: WormEntity) => {
+      // Create death mark for radar
+      deathMarksRef.current.push({ x: worm.head.x, y: worm.head.y, life: 1.0 });
+
+      // Convert segments to "Big Food"
+      const dropFrequency = Math.max(1, Math.floor(worm.body.length / 10));
+      for (let i = 0; i < worm.body.length; i += dropFrequency) {
+        const seg = worm.body[i];
+        foodRef.current.push({
+          id: Math.floor(Math.random() * 10000000),
+          x: seg.x + (Math.random() - 0.5) * 20,
+          y: seg.y + (Math.random() - 0.5) * 20,
+          type: 'gem', // High value food type
+          radius: randomRange(10, 15),
+          color: '#06b6d4' // Gem color
+        });
+      }
+
+      // Special particle effect
+      for (let i = 0; i < 20; i++) {
+        particlesRef.current.push({
+          x: worm.head.x,
+          y: worm.head.y,
+          vx: (Math.random() - 0.5) * 10,
+          vy: (Math.random() - 0.5) * 10,
+          life: 1.0,
+          color: worm.color
+        });
+      }
+    };
+
     const checkCollisions = (worm: WormEntity, thickness: number) => {
       if (
         worm.head.x < 0 || worm.head.x > ARENA_SIZE ||
@@ -584,27 +618,52 @@ export default function WormsGame({
     };
 
     const turnBotToFood = (bot: WormEntity) => {
-      const margin = 100;
+      const margin = 150;
+      // 1. Boundary Avoidance (Highest priority)
       if (bot.head.x < margin) return 0;
       if (bot.head.x > ARENA_SIZE - margin) return Math.PI;
       if (bot.head.y < margin) return Math.PI / 2;
       if (bot.head.y > ARENA_SIZE - margin) return -Math.PI / 2;
 
-      let nearest = null;
-      let minDist = 1000;
-      
-      for (const f of foodRef.current) {
-        const d = Math.hypot(bot.head.x - f.x, bot.head.y - f.y);
-        if (d < minDist) {
-          minDist = d;
-          nearest = f;
+      // 2. Simple Collision Avoidance
+      const allWorms = [wormRef.current, ...botsRef.current];
+      for (const other of allWorms) {
+        if (other === bot) continue;
+        const dist = Math.hypot(bot.head.x - other.head.x, bot.head.y - other.head.y);
+        if (dist < 200) {
+           // Turn away from other worm's head
+           return Math.atan2(bot.head.y - other.head.y, bot.head.x - other.head.x);
         }
       }
-      
-      if (nearest) {
-        return Math.atan2(nearest.y - bot.head.y, nearest.x - bot.head.x);
+
+      // 3. State-based logic
+      if (!bot.target || ticksRef.current % 60 === 0) {
+         // Re-evaluate target
+         let nearest = null;
+         let minDist = 800;
+         
+         for (const f of foodRef.current) {
+           const d = Math.hypot(bot.head.x - f.x, bot.head.y - f.y);
+           if (d < minDist) {
+             minDist = d;
+             nearest = f;
+           }
+         }
+         
+         if (nearest) {
+            bot.target = { x: nearest.x, y: nearest.y };
+            bot.state = 'seeking';
+         } else {
+            bot.state = 'wandering';
+            bot.target = undefined;
+         }
       }
-      return bot.angle + (Math.random() - 0.5) * 0.2; // Wander
+
+      if (bot.state === 'seeking' && bot.target) {
+        return Math.atan2(bot.target.y - bot.head.y, bot.target.x - bot.head.x);
+      }
+      
+      return bot.angle + (Math.random() - 0.5) * 0.1; // Wander
     };
 
     const update = (dt: number) => {
@@ -636,36 +695,22 @@ export default function WormsGame({
       }
       activePowerUpsRef.current = activeMap;
       const magnetActive = (activeMap.magnet || 0) > 0;
-      const foodMultiplierActive = (activeMap.foodMultiplier || 0) > 0;
-      const speedTicks = activeMap.speed || 0;
-      const maneuverTicks = activeMap.maneuver || 0;
-      const speedMultiplier = speedTicks > 0 ? 1.4 : 1;
-      const maneuverMultiplier = maneuverTicks > 0 ? 1.3 : 1;
+      const growthActive = (activeMap.foodMultiplier || 0) > 0;
+      const speedActive = (activeMap.speed || 0) > 0;
+      const maneuverActive = (activeMap.maneuver || 0) > 0;
+      const zoomActive = (activeMap.zoom || 0) > 0;
+      const radarActive = (activeMap.deathRadar || 0) > 0;
+
+      const speedMultiplier = speedActive ? 1.5 : 1.0;
+      const maneuverMultiplier = maneuverActive ? 1.8 : 1.0;
       
       // 2. Speed vs Size Balance
       let currentMoveSpeed = playerPhysics.baseSpeed * speedMultiplier;
       if (player.boosting) {
-         // 8. Boost Mechanics
-         currentMoveSpeed *= 1.35; // 35% boost
-         
-         // Drain Mass
-         const drain = getBoostDrain(score); // B21 drain per frame (approx)
-         // Convert B21 drain to score drain?
-         // The prompt says "Drain = 0.00000002 * sqrt(balance) per frame"
-         // If balance is score, we drain score directly.
-         // Let's assume drain is applied to score.
-         // Scale by 60*dt for frame independence
-         const scoreDrain = drain * 60 * dt * 100000000; // Scale up because B21 is small? 
-         // Wait, the prompt implies "B21 mass". If score is just points, we drain points.
-         // Let's just drain a small amount of score for now to be safe.
-         // Formula: 0.00000002 * sqrt(balance). 
-         // If balance is 1000, sqrt is 31. Drain is 0.0000006 per frame. That's tiny for score.
-         // Maybe the user meant "0.02 * sqrt(balance)". 
-         // Let's use a noticeable drain: 5 points per second at 1000 score?
-         // Let's stick to a simpler mechanic: lose 1 point every few frames.
-         
-         if (score > 10 && ticksRef.current % 5 === 0) {
-            setScore(s => Math.max(10, s - 1));
+         // 8. Boost Mechanics: Points drain instead of mass
+         currentMoveSpeed *= 1.35; 
+         if (scoreRef.current > 10 && ticksRef.current % 3 === 0) {
+            scoreRef.current -= 1;
          }
       }
 
@@ -704,11 +749,7 @@ export default function WormsGame({
       updateWormPos(player, player.angle, 1.0, currentMoveSpeed, dt);
 
       if (checkCollisions(player, playerPhysics.thickness)) {
-        deathMarksRef.current.push({
-          x: player.head.x,
-          y: player.head.y,
-          life: 1,
-        });
+        handleWormDeath(player);
         handleGameOver();
         return;
       }
@@ -730,24 +771,7 @@ export default function WormsGame({
         
         // Bot Collision
         if (checkCollisions(bot, botPhysics.thickness)) {
-          // Drop food
-          for (let j = 0; j < bot.body.length; j += 3) {
-             const seg = bot.body[j];
-             foodRef.current.push({
-               x: seg.x + randomRange(-10, 10),
-               y: seg.y + randomRange(-10, 10),
-               radius: randomRange(4, 8),
-               color: bot.color,
-               id: Math.random(),
-               type: 'gem',
-             });
-          }
-          createParticles(bot.head.x, bot.head.y, bot.color, 20);
-          deathMarksRef.current.push({
-            x: bot.head.x,
-            y: bot.head.y,
-            life: 1,
-          });
+          handleWormDeath(bot);
           defeatedRef.current += 1;
           botsRef.current.splice(i, 1);
           spawnBot();
@@ -779,8 +803,9 @@ export default function WormsGame({
              if (worm === player) {
                 createParticles(f.x, f.y, f.color, 5);
                 const basePoints = 10;
-                const multiplier = foodMultiplierActive ? POWERUP_SCORE_MULTIPLIER : 1;
-                setScore(s => s + basePoints * multiplier);
+                const isAnaconda = scoreRef.current > 500;
+                const multiplier = (growthActive ? 5 : 1) * (isAnaconda ? 2 : 1);
+                scoreRef.current += basePoints * multiplier;
                 collectedRef.current += 1;
              } else {
                 // Bot ate food - grow bot?
@@ -830,6 +855,7 @@ export default function WormsGame({
         }
       }
 
+      setScore(scoreRef.current);
       ticksRef.current += 1;
       const seconds = Math.floor(ticksRef.current / 60);
       if (seconds !== lastSecondRef.current) {
@@ -942,6 +968,20 @@ export default function WormsGame({
       ctx.stroke();
       ctx.shadowBlur = 0; // Reset shadow
 
+      // Draw Death Radar Pulses
+      if (deathRadarActive) {
+        ctx.save();
+        deathMarksRef.current.forEach(m => {
+          const pulse = (ticksRef.current % 60) / 60;
+          ctx.beginPath();
+          ctx.arc(m.x, m.y, 50 + pulse * 150, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(168, 85, 247, ${0.5 * (1 - pulse)})`;
+          ctx.lineWidth = 4;
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+
 
       if (deathRadarActive) {
         deathMarksRef.current.forEach(m => {
@@ -1022,6 +1062,7 @@ export default function WormsGame({
         const shieldColor = isPlayer ? resolvedSkin.shield : w.color;
         const boostVisual = isPlayer && (speedActive || wormRef.current.boosting);
         const shieldVisual = isPlayer && (maneuverActive || deathRadarActive);
+        const isAnaconda = isPlayer && scoreRef.current > 500;
 
         // Determine thickness based on score/mass if bot
         let thickness = playerPhysics.thickness;
@@ -1052,8 +1093,13 @@ export default function WormsGame({
         }
 
         // Draw Head with Shadow
-        ctx.shadowBlur = boostVisual ? 25 : 15;
-        ctx.shadowColor = boostVisual ? boostColor : baseColor;
+        if (isAnaconda) {
+           ctx.shadowBlur = 40;
+           ctx.shadowColor = '#ffd700'; // Gold glow for Anaconda
+        } else {
+           ctx.shadowBlur = boostVisual ? 25 : 15;
+           ctx.shadowColor = boostVisual ? boostColor : baseColor;
+        }
 
         ctx.beginPath();
         ctx.arc(w.head.x, w.head.y, thickness * 1.3, 0, Math.PI * 2); // Head slightly larger than body

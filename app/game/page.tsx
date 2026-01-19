@@ -28,10 +28,14 @@ import AdContainer from '@/components/ads/AdContainer';
 
 // Configuration for Tournament
 const TOURNAMENT_CONFIG = {
-  contractAddress: process.env.NEXT_PUBLIC_TOURNAMENT_CONTRACT_ADDRESS || "0x0000000000000000000000000000000000000000", // Replace with real address
-  entryFee: "50", // 50 B21
+  contractAddress: process.env.NEXT_PUBLIC_TOURNAMENT_CONTRACT_ADDRESS || "0x0000000000000000000000000000000000000000",
+  tiers: {
+    bronze: { name: 'Bronze', fee: '50', color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/30' },
+    gold: { name: 'Gold/Pro', fee: '500', color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30' },
+  }
 };
 
+type TournamentTier = 'bronze' | 'gold';
 type GameView = 'menu' | 'lobby' | 'playing' | 'tournament';
 
 function GamePageContent() {
@@ -50,6 +54,7 @@ function GamePageContent() {
   const [wardrobeTab, setWardrobeTab] = useState<'skins' | 'colors' | 'faces'>('skins');
   const [activeSkin, setActiveSkin] = useState<string>('classic');
   const [selectedFace, setSelectedFace] = useState<string>('classic-eyes');
+  const [selectedTier, setSelectedTier] = useState<TournamentTier>('bronze');
   const [savingSkin, setSavingSkin] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
@@ -78,7 +83,7 @@ function GamePageContent() {
     }
   }, [address]);
 
-  const handleTournamentEntry = async (tournamentId: number) => {
+  const handleTournamentEntry = async (tournamentId: number, fee: string) => {
     if (!address) return false;
     setIsProcessingPayment(true);
     try {
@@ -92,7 +97,7 @@ function GamePageContent() {
 
       const result = await joinTournament(
         tournamentId,
-        TOURNAMENT_CONFIG.entryFee,
+        fee,
         TOURNAMENT_CONFIG.contractAddress
       );
 
@@ -114,10 +119,8 @@ function GamePageContent() {
     if (!address) return;
 
     if (mode === 'tournament') {
-        // For tournament, we need to process payment first
-        // We use a pseudo-ID for now since we create the room dynamically
-        // In a real app, you might fetch a tournament ID from the server first
-        const success = await handleTournamentEntry(1); // ID 1 for "Generic Tournament"
+        const fee = TOURNAMENT_CONFIG.tiers[selectedTier].fee;
+        const success = await handleTournamentEntry(1, fee); // ID 1 for "Generic Tournament"
         if (!success) return;
     }
 
@@ -137,7 +140,8 @@ function GamePageContent() {
             connected: true,
           },
           settings: mode === 'tournament' ? {
-            entryFee: 50,
+            entryFee: parseInt(TOURNAMENT_CONFIG.tiers[selectedTier].fee),
+            tier: selectedTier,
             prizePool: 0,
           } : {},
         }),
@@ -172,7 +176,8 @@ function GamePageContent() {
       if (data.success && data.room) {
         // Check if tournament
         if (data.room.mode === 'tournament') {
-            const success = await handleTournamentEntry(1);
+            const fee = data.room.settings?.entryFee?.toString() || TOURNAMENT_CONFIG.tiers.bronze.fee;
+            const success = await handleTournamentEntry(1, fee);
             if (!success) return;
         }
 
@@ -474,6 +479,25 @@ function GamePageContent() {
                       Tournament
                     </button>
                   </div>
+
+                  {gameMode === 'tournament' && (
+                    <div className="flex gap-2 rounded-full bg-slate-900/80 border border-slate-600/60 px-2 py-1">
+                      {(Object.keys(TOURNAMENT_CONFIG.tiers) as TournamentTier[]).map((tier) => (
+                        <button
+                          key={tier}
+                          onClick={() => setSelectedTier(tier)}
+                          className={[
+                            'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all',
+                            selectedTier === tier
+                              ? 'bg-white text-black shadow-[0_0_12px_rgba(255,255,255,0.3)]'
+                              : 'text-slate-400 hover:text-slate-200',
+                          ].join(' ')}
+                        >
+                          {TOURNAMENT_CONFIG.tiers[tier].name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <button
@@ -535,10 +559,10 @@ function GamePageContent() {
                 >
                   <div className="flex items-center gap-2">
                     <Trophy className="w-4 h-4 text-amber-300" />
-                    <span>Host tournament</span>
+                    <span>Host {TOURNAMENT_CONFIG.tiers[selectedTier].name}</span>
                   </div>
                   <div className="flex items-center gap-1">
-                     <span className="text-amber-300 font-bold">50</span>
+                     <span className="text-amber-300 font-bold">{TOURNAMENT_CONFIG.tiers[selectedTier].fee}</span>
                      <Coins className="w-4 h-4 text-amber-300" />
                   </div>
                 </button>
