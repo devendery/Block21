@@ -21,7 +21,7 @@ import {
 import { WalletProvider, useWallet } from '@/components/economy/WalletContext';
 import { useWallet as useWeb3Wallet } from '@/hooks/useWallet';
 import PaymentModal from '@/components/economy/PaymentModal';
-import { UserProfile, WormsMode } from '@/types/game';
+import { UserProfile, WormsMode, GameStats } from '@/types/game';
 import { useRouter } from 'next/navigation';
 
 type GoogleAdBannerProps = {
@@ -264,7 +264,8 @@ function GameLobby() {
     }
   };
 
-  const handleGameOver = async (score: number) => {
+  const handleGameOver = async (scoreOrStats: number | GameStats) => {
+    const score = typeof scoreOrStats === 'number' ? scoreOrStats : scoreOrStats.score;
     setLastScore(score);
     
     let reward = 0;

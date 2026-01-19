@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useWallet } from '@/hooks/useWallet';
 import WormsGame from '@/components/game/WormsGame';
@@ -21,6 +21,13 @@ import {
   Wallet,
   Play,
   Users,
+  Mail,
+  Timer,
+  TicketPercent,
+  Sparkles,
+  Gift,
+  Video,
+  Share2
 } from 'lucide-react';
 import type { GameRoom } from '@/lib/multiplayer';
 import { UserProfile, WormsMode, GameStats } from '@/types/game';
@@ -28,7 +35,7 @@ import AdContainer from '@/components/ads/AdContainer';
 
 type GameView = 'menu' | 'lobby' | 'playing' | 'tournament';
 
-export default function WormsEnhancedPage() {
+function WormsEnhancedContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { address, isConnected, connectWallet } = useWallet();
@@ -630,5 +637,13 @@ export default function WormsEnhancedPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function WormsEnhancedPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0b1830] text-white flex items-center justify-center">Loading...</div>}>
+      <WormsEnhancedContent />
+    </Suspense>
   );
 }
