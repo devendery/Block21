@@ -6,6 +6,7 @@ import { WalletProvider } from '@/components/economy/WalletContext';
 import { UserProfile } from '@/types/game';
 import { User, Trophy, Gamepad2, Edit2, Save, Loader2, Wallet, Sparkles } from 'lucide-react';
 import WalletConnect from '@/components/WalletConnect';
+import { formatNameWithWalletSuffix } from '@/lib/nameFormat';
 
 function ProfileContent() {
   const { address, isConnected } = useWallet();
@@ -135,7 +136,9 @@ function ProfileContent() {
                 </div>
               ) : (
                 <>
-                    <h1 className="text-3xl font-bold text-white">{profile.username}</h1>
+                    <h1 className="text-3xl font-bold text-white">
+                      {address ? formatNameWithWalletSuffix(profile.username, address) : profile.username}
+                    </h1>
                     <button onClick={() => setEditing(true)} className="text-slate-500 hover:text-white transition-colors">
                         <Edit2 className="w-4 h-4" />
                     </button>
@@ -147,8 +150,6 @@ function ProfileContent() {
                 <span>Lvl {profile.level}</span>
                 <span>•</span>
                 <span>{profile.xp} XP</span>
-                <span>•</span>
-                <span>{address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Unknown'}</span>
             </div>
 
             <div className="w-full max-w-md h-2 bg-slate-800 rounded-full overflow-hidden">

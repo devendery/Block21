@@ -16,7 +16,7 @@ const navItems = [
   { name: "User Experience", href: "/user-experience" },
   { name: "Whitepaper", href: "/whitepaper" },
   { name: "Pitch Deck", href: "/pitch" },
-  { name: "Game", href: "/game" },
+  { name: "Play", href: "/play" },
   { name: "Learn", href: "/learn" },
 ];
 

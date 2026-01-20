@@ -25,6 +25,7 @@ import {
 import type { GameRoom } from '@/lib/multiplayer';
 import { UserProfile, WormsMode, GameStats } from '@/types/game';
 import AdContainer from '@/components/ads/AdContainer';
+import { formatNameWithWalletSuffix } from '@/lib/nameFormat';
 
 // Configuration for Tournament
 const TOURNAMENT_CONFIG = {
@@ -125,7 +126,7 @@ function GamePageContent() {
     }
 
     try {
-      const username = profile?.username || `Player${address.slice(0, 6)}`;
+      const username = profile?.username || "Player";
       const response = await fetch('/api/game/room', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -182,7 +183,7 @@ function GamePageContent() {
         }
 
         // Join the room
-        const username = profile?.username || `Player${address.slice(0, 6)}`;
+        const username = profile?.username || "Player";
         const joinResponse = await fetch('/api/game/room', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -346,7 +347,7 @@ function GamePageContent() {
                 handleRoomUpdate({ status: 'finished' });
               }
             }}
-            playerName={profile?.username || `Player${address?.slice(0, 6)}`}
+            playerName={profile?.username && address ? formatNameWithWalletSuffix(profile.username, address) : profile?.username || "Player"}
             skinId={(profile?.activeSkin as any) || activeSkin || 'classic'}
             mode={selectedMode}
             multiplayer={gameMode !== 'single'}
@@ -382,7 +383,7 @@ function GamePageContent() {
             </div>
             <div>
               <div className="text-lg font-black">
-                {profile?.username || `Player${address?.slice(0, 6) || ''}`}
+                {profile?.username && address ? formatNameWithWalletSuffix(profile.username, address) : profile?.username || "Player"}
               </div>
               <div className="flex items-center gap-2 text-xs text-sky-200/80 font-mono">
                 <span>Lvl {profile?.level ?? 1}</span>
@@ -642,10 +643,7 @@ function GamePageContent() {
                 <div className="mt-auto pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
                   <div>
                     <div className="font-semibold text-slate-100">
-                      {profile?.username || `Player${address.slice(0, 6)}`}
-                    </div>
-                    <div className="font-mono text-slate-500">
-                      {address.slice(0, 6)}...{address.slice(-4)}
+                      {profile?.username && address ? formatNameWithWalletSuffix(profile.username, address) : profile?.username || "Player"}
                     </div>
                   </div>
                   <button
@@ -690,9 +688,11 @@ function GamePageContent() {
 }
 
 export default function GamePage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0b1830] text-white flex items-center justify-center">Loading...</div>}>
-      <GamePageContent />
-    </Suspense>
-  );
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/play");
+  }, [router]);
+
+  return null;
 }

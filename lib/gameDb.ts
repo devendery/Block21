@@ -350,13 +350,67 @@ export async function auditWalletRecords(
 }
 
 const PROFILE_PREFIX = "user:profile:";
+const PROFILE_FILE = path.join(process.cwd(), "game-profiles.json");
+const SNAKE_COSMETIC_PREFIX = "user:snakeCosmetic:";
+const SNAKE_COSMETIC_FILE = path.join(process.cwd(), "snake-cosmetics.json");
+
+type SnakeCosmetic = {
+  skin: string;
+  eyes: string;
+  mouth: string;
+  customPalette?: { primary: number; secondary: number } | null;
+  updatedAt: number;
+};
+
+async function readProfilesFromDisk(): Promise<Record<string, UserProfile> | null> {
+  try {
+    const raw = await fs.promises.readFile(PROFILE_FILE, "utf8");
+    const parsed = JSON.parse(raw) as Record<string, UserProfile>;
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch {
+  }
+  return null;
+}
+
+async function writeProfilesToDisk(profiles: Record<string, UserProfile>): Promise<boolean> {
+  try {
+    await fs.promises.writeFile(PROFILE_FILE, JSON.stringify(profiles), "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readSnakeCosmeticsFromDisk(): Promise<Record<string, SnakeCosmetic> | null> {
+  try {
+    const raw = await fs.promises.readFile(SNAKE_COSMETIC_FILE, "utf8");
+    const parsed = JSON.parse(raw) as Record<string, SnakeCosmetic>;
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch {
+  }
+  return null;
+}
+
+async function writeSnakeCosmeticsToDisk(cosmetics: Record<string, SnakeCosmetic>): Promise<boolean> {
+  try {
+    await fs.promises.writeFile(SNAKE_COSMETIC_FILE, JSON.stringify(cosmetics), "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function getUserProfile(walletAddress: string): Promise<UserProfile | null> {
   const redis = await getRedis();
-  if (!redis) return null;
+  const addr = walletAddress.toLowerCase();
+  if (!redis) {
+    const profiles = await readProfilesFromDisk();
+    const p = profiles?.[addr];
+    return p && typeof p === "object" ? p : null;
+  }
   
   try {
-    const key = `${PROFILE_PREFIX}${walletAddress.toLowerCase()}`;
+    const key = `${PROFILE_PREFIX}${addr}`;
     const raw = await redis.get(key);
     if (raw) {
       return JSON.parse(raw) as UserProfile;
@@ -369,7 +423,14 @@ export async function getUserProfile(walletAddress: string): Promise<UserProfile
 
 export async function saveUserProfile(profile: UserProfile): Promise<boolean> {
   const redis = await getRedis();
-  if (!redis) return false;
+  if (!redis) {
+    const addr = profile.walletAddress.toLowerCase();
+    const profiles = (await readProfilesFromDisk()) || {};
+    profile.walletAddress = addr;
+    profile.updatedAt = Date.now();
+    profiles[addr] = profile;
+    return writeProfilesToDisk(profiles);
+  }
   
   try {
     const key = `${PROFILE_PREFIX}${profile.walletAddress.toLowerCase()}`;
@@ -385,7 +446,7 @@ export async function saveUserProfile(profile: UserProfile): Promise<boolean> {
 export async function createDefaultProfile(walletAddress: string): Promise<UserProfile> {
   const profile: UserProfile = {
     walletAddress: walletAddress.toLowerCase(),
-    username: `Player ${walletAddress.slice(0, 6)}`,
+    username: "Player",
     avatar: 'default',
     level: 1,
     xp: 0,
@@ -404,4 +465,88 @@ export async function createDefaultProfile(walletAddress: string): Promise<UserP
   
   await saveUserProfile(profile);
   return profile;
+}
+
+export async function getSnakeCosmetic(walletAddress: string): Promise<Omit<SnakeCosmetic, "updatedAt"> | null> {
+  const redis = await getRedis();
+  const addr = walletAddress.toLowerCase();
+  if (!redis) {
+    const cosmetics = await readSnakeCosmeticsFromDisk();
+    const c = cosmetics?.[addr];
+    if (!c || typeof c !== "object") return null;
+    return { skin: c.skin, eyes: c.eyes, mouth: c.mouth, customPalette: c.customPalette ?? null };
+  }
+
+  try {
+    const key = `${SNAKE_COSMETIC_PREFIX}${addr}`;
+    const raw = await redis.get(key);
+    if (!raw) return null;
+    const c = JSON.parse(raw) as SnakeCosmetic;
+    if (!c || typeof c !== "object") return null;
+    return { skin: c.skin, eyes: c.eyes, mouth: c.mouth, customPalette: c.customPalette ?? null };
+  } catch (err) {
+    console.error("Failed to load snake cosmetic", err);
+    return null;
+  }
+}
+
+export async function saveSnakeCosmetic(walletAddress: string, cosmetic: Omit<SnakeCosmetic, "updatedAt">): Promise<boolean> {
+  const redis = await getRedis();
+  const addr = walletAddress.toLowerCase();
+  const payload: SnakeCosmetic = { ...cosmetic, updatedAt: Date.now() };
+
+  if (!redis) {
+    const cosmetics = (await readSnakeCosmeticsFromDisk()) || {};
+    cosmetics[addr] = payload;
+    return writeSnakeCosmeticsToDisk(cosmetics);
+  }
+
+  try {
+    const key = `${SNAKE_COSMETIC_PREFIX}${addr}`;
+    await redis.set(key, JSON.stringify(payload));
+    return true;
+  } catch (err) {
+    console.error("Failed to save snake cosmetic", err);
+    return false;
+  }
+}
+
+export async function deleteUserProfile(walletAddress: string): Promise<boolean> {
+  const redis = await getRedis();
+  const addr = walletAddress.toLowerCase();
+  if (!redis) {
+    const profiles = (await readProfilesFromDisk()) || {};
+    if (!profiles[addr]) return true;
+    delete profiles[addr];
+    return writeProfilesToDisk(profiles);
+  }
+
+  try {
+    const key = `${PROFILE_PREFIX}${addr}`;
+    await redis.del(key);
+    return true;
+  } catch (err) {
+    console.error("Failed to delete user profile", err);
+    return false;
+  }
+}
+
+export async function deleteSnakeCosmetic(walletAddress: string): Promise<boolean> {
+  const redis = await getRedis();
+  const addr = walletAddress.toLowerCase();
+  if (!redis) {
+    const cosmetics = (await readSnakeCosmeticsFromDisk()) || {};
+    if (!cosmetics[addr]) return true;
+    delete cosmetics[addr];
+    return writeSnakeCosmeticsToDisk(cosmetics);
+  }
+
+  try {
+    const key = `${SNAKE_COSMETIC_PREFIX}${addr}`;
+    await redis.del(key);
+    return true;
+  } catch (err) {
+    console.error("Failed to delete snake cosmetic", err);
+    return false;
+  }
 }

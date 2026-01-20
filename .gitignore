@@ -28,3 +28,6 @@ ts-debug.log*
 # Vercel
 .vercel
 .env
+
+# Crawler
+crawled_data/

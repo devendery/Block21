@@ -2,6 +2,7 @@ import React from 'react';
 import { Trophy, Coins, Share2, Play, X } from 'lucide-react';
 import { UserProfile, GameStats } from '@/types/game';
 import AdContainer from '@/components/ads/AdContainer';
+import { formatNameWithWalletSuffix } from '@/lib/nameFormat';
 
 type GameOverModalProps = {
   stats: GameStats;
@@ -45,7 +46,10 @@ export default function GameOverModal({
               </div>
             </div>
             <div className="mt-2 text-[10px] text-sky-100/80">
-              Great run, <span className="font-semibold">{profile?.username || `Player${address?.slice(0, 6) || ''}`}</span>
+              Great run,{" "}
+              <span className="font-semibold">
+                {profile?.username && address ? formatNameWithWalletSuffix(profile.username, address) : profile?.username || "Player"}
+              </span>
             </div>
           </div>
 

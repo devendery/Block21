@@ -46,11 +46,35 @@ const config: Config = {
         shine: {
           '0%': { backgroundPosition: '200% center' },
           '100%': { backgroundPosition: '-200% center' },
-        }
+        },
+        meteor: {
+          "0%": { transform: "rotate(var(--angle)) translateX(0)", opacity: "1" },
+          "70%": { opacity: "1" },
+          "100%": {
+            transform: "rotate(var(--angle)) translateX(-500px)",
+            opacity: "0",
+          },
+        },
+        "shimmer-slide": {
+          to: {
+            transform: "translate(calc(100cqw - 100%), 0)",
+          },
+        },
+        "spin-around": {
+          "0%": {
+            transform: "translateZ(0) rotate(0)",
+          },
+          "100%": {
+            transform: "translateZ(0) rotate(360deg)",
+          },
+        },
       },
       animation: {
         shimmer: 'shimmer 2s infinite',
         shine: 'shine 3s linear infinite',
+        meteor: "meteor 5s linear infinite",
+        "shimmer-slide": "shimmer-slide var(--speed) ease-in-out infinite alternate",
+        "spin-around": "spin-around calc(var(--speed) * 2) infinite linear",
       },
       backgroundImage: {
         'metallic-gold': 'linear-gradient(135deg, #63b3ed 0%, #90cdf4 50%, #3182ce 100%)',

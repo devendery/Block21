@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useWallet } from '@/hooks/useWallet';
+import { formatNameWithWalletSuffix } from '@/lib/nameFormat';
 import { 
   Users, 
   Copy, 
@@ -137,9 +138,8 @@ export default function MultiplayerLobby({ room, onStart, onLeave, onUpdate }: M
                           {player.username[0].toUpperCase()}
                         </div>
                         <div>
-                          <div className="font-semibold text-white">{player.username}</div>
-                          <div className="text-xs text-slate-400 font-mono">
-                            {player.address.slice(0, 6)}...{player.address.slice(-4)}
+                          <div className="font-semibold text-white">
+                            {formatNameWithWalletSuffix(player.username, player.address)}
                           </div>
                         </div>
                       </div>

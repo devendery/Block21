@@ -3,6 +3,7 @@
 import React from 'react';
 import { Trophy, Crown, Medal, Award } from 'lucide-react';
 import type { Player } from '@/lib/multiplayer';
+import { formatNameWithWalletSuffix } from '@/lib/nameFormat';
 
 type TournamentLeaderboardProps = {
   players: Player[];
@@ -72,7 +73,9 @@ export default function TournamentLeaderboard({ players, prizePool = 0 }: Tourna
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold text-white">{player.username}</span>
+                      <span className="font-bold text-white">
+                        {formatNameWithWalletSuffix(player.username, player.address)}
+                      </span>
                       {index === 0 && (
                         <span className="px-2 py-0.5 rounded-full bg-yellow-400/20 text-yellow-400 text-xs font-bold">
                           WINNER
