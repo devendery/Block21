@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint . --max-warnings=50",
     "typecheck": "tsc --noEmit",
+    "phase2:entry": "node scripts/check_phase2_entry.js",
     "ws:server": "node server/websocket-server.js",
     "phase1:server": "node server/phase1/server.js",
     "dev:all": "concurrently \"npm run dev\" \"npm run ws:server\""
