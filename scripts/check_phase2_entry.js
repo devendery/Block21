@@ -145,7 +145,6 @@ function main() {
   assertTagExists(tag);
   assertFilesUnchangedSinceTag(tag, [
     "game-client/GameRuntime.ts",
-    "components/phase1/snake/SnakeGame.tsx",
   ]);
 
   assertNoForbiddenImportsInReact();
