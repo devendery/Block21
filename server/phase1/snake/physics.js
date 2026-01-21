@@ -138,8 +138,9 @@ function updatePlayerPhysics(id, p, phys, dt, options = {}) {
     p.speed = Math.max(targetSpeed, p.speed - delta);
   }
 
-  // Turn penalty (Constant, not speed-scaled)
-  p.speed *= 1 - TURN_PENALTY;
+  // Turn penalty (Proportional to turn amount)
+  const turnAmount = Math.abs(normalizeAngle(p.targetAngle - p.angle)) / Math.PI; // 0..1
+  p.speed *= 1 - TURN_PENALTY * turnAmount;
 
   // 3. Position Update (Velocity Integration)
   // New Pos = Old Pos + (Velocity * dt)
@@ -160,7 +161,11 @@ function updatePlayerPhysics(id, p, phys, dt, options = {}) {
   // Save trail for collision checking and rendering
   // Logic max segments is usually higher than render max
   const trailMax = 5 * (Math.min(p.length, 240) + 20); // 5 = spacingSteps
-  pushTrail(phys.trail, p.x, p.y, trailMax);
+  
+  // Only push trail if alive (Prevent implosion on death frame)
+  if (p.alive) {
+    pushTrail(phys.trail, p.x, p.y, trailMax);
+  }
 }
 
 // --- COLLISION LOGIC ---
@@ -180,12 +185,12 @@ function checkCollisions(playersState, physicsMap, gridW, gridH) {
     
     // STRICT WALL COLLISION
     // If head touches boundary -> DEAD
-    // Phase-1 Canon: Radius-aware check
+    // Phase-1 Canon: Radius-aware check (visual edge vs wall)
     if (
-      p.x <= p.dangerRadius || 
-      p.x >= gridW - p.dangerRadius || 
-      p.y <= p.dangerRadius || 
-      p.y >= gridH - p.dangerRadius
+      p.x <= p.radius || 
+      p.x >= gridW - p.radius || 
+      p.y <= p.radius || 
+      p.y >= gridH - p.radius
     ) {
       deadIds.add(id);
       continue;
