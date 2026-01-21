@@ -138,9 +138,8 @@ function updatePlayerPhysics(id, p, phys, dt, options = {}) {
     p.speed = Math.max(targetSpeed, p.speed - delta);
   }
 
-  // Turn penalty (Proportional to turn amount)
-  const turnAmount = Math.abs(normalizeAngle(p.targetAngle - p.angle)) / Math.PI; // 0..1
-  p.speed *= 1 - TURN_PENALTY * turnAmount;
+  // Turn penalty (Constant, Phase-1 Canon)
+  p.speed *= 1 - TURN_PENALTY;
 
   // 3. Position Update (Velocity Integration)
   // New Pos = Old Pos + (Velocity * dt)
