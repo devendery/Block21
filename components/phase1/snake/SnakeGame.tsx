@@ -241,8 +241,9 @@ export default function SnakeGame({ roomName = "snake_arena" }: { roomName?: str
   }, [control, identityKey]);
 
   useEffect(() => {
+    if (!hasStarted) return;
     updateCosmetics(skin, eyes, mouth);
-  }, [eyes, mouth, skin]);
+  }, [eyes, hasStarted, mouth, skin]);
 
   useEffect(() => {
     const joinAddress = isConnected && address ? address : roomName === "snake" ? null : guestAddress;
