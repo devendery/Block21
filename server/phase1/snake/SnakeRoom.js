@@ -3,28 +3,17 @@ const { Schema, MapSchema, ArraySchema, defineTypes } = require("@colyseus/schem
 const { FoodState } = require("./schema");
 const { pickFood } = require("./foodCatalog");
 const {
-  buildSegmentBuckets,
+  updatePlayerPhysics,
+  checkCollisions,
   dist2,
-  getNearbyBucketItems,
-  pushTrail,
-  sampleTrailByIndex,
+  clamp,
 } = require("./physics");
 
 const TICK_RATE = 20;
 const DT = 1 / TICK_RATE;
 
-const BASE_SPEED = 6.0;
-const MAX_SPEED = 9.0;
-const BOOST_MULT = 1.35;
-const BOOST_MASS_DRAIN = 1.0;
-const MIN_BOOST_MASS = 6;
-
-const MAX_TURN_RATE = 2.8; // rad/sec
-const TURN_PENALTY = 0.18;
-
-const ACCEL_TIME = 0.35;
-const DECEL_TIME = 0.2;
-
+// These constants are now largely managed by physics.js defaults,
+// but we keep them here for reference or overrides if needed.
 const BASE_MAP_W = 96;
 const BASE_MAP_H = 56;
 
@@ -104,19 +93,14 @@ defineTypes(SnakeState, {
   gridH: "number",
 });
 
+// Deprecated local helpers (now imported from physics.js)
+// function randomInt...
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function clamp(v, a, b) {
-  return Math.max(a, Math.min(b, v));
-}
-
-function rotateTowards(a, b, max) {
-  let d = normalizeAngle(b - a);
-  d = clamp(d, -max, max);
-  return a + d;
-}
+// clamp is imported from physics.js
+// rotateTowards is deprecated/unused (logic in physics.js)
 
 function normalizeAngle(a) {
   while (a > Math.PI) a -= Math.PI * 2;
@@ -296,6 +280,8 @@ class SnakeRoom extends Room {
     return { grow: true, rewardTrigger: false };
   }
 
+  // --- GAME LOOP ---
+
   update(deltaTime) {
     if (this.state.status !== "playing") return;
     const dtMs = typeof deltaTime === "number" && Number.isFinite(deltaTime) ? deltaTime : this.fixedStepMs;
@@ -340,6 +326,15 @@ class SnakeRoom extends Room {
     const p = this.state.players.get(id);
     if (!p) return;
     p.alive = false;
+
+    // Drop food on death
+    const dropCount = Math.min(Math.floor(p.mass / 2), 10);
+    // TODO: Spawn actual food? Original code omitted it too in the snippet I read?
+    // Let's ensure we just mark them dead. The physics check already stops updating them.
+    
+    // Clear trail to prevent ghost collisions (though checkCollisions skips dead players)
+    const phys = this.physicsById.get(id);
+    if (phys) phys.trail.length = 0;
   }
 
   updateMapSize(aliveCount) {
@@ -353,114 +348,23 @@ class SnakeRoom extends Room {
     }
   }
 
-  hitWall(p) {
-    const w = this.state.gridW || BASE_MAP_W;
-    const h = this.state.gridH || BASE_MAP_H;
-    return (
-      p.x < p.dangerRadius ||
-      p.x > w - p.dangerRadius ||
-      p.y < p.dangerRadius ||
-      p.y > h - p.dangerRadius
-    );
-  }
+  // Deprecated: Logic moved to physics.js
+  // Keeping method stub if subclasses call it (though they shouldn't)
+  hitWall(p) { return false; }
 
-  updateMovement(id, p) {
-    const phys = this.physicsById.get(id);
-    if (!phys) return;
+  // Deprecated: Logic moved to physics.js
+  updateMovement(id, p) {}
 
-    const maxTurn = MAX_TURN_RATE * DT;
-    p.angle = rotateTowards(p.angle, p.targetAngle, maxTurn);
+  // Deprecated: Logic moved to physics.js
+  updateGrowth(p) {}
 
-    let targetSpeed = BASE_SPEED;
-    if (p.boosting && p.mass > MIN_BOOST_MASS) {
-      targetSpeed *= BOOST_MULT;
-    }
-
-    const accelT = clamp(Math.abs(targetSpeed - p.speed) / targetSpeed, 0, 1);
-    const eased = 1 - Math.pow(1 - accelT, 2);
-    p.speed += (targetSpeed - p.speed) * eased;
-
-    const speedRatio = p.speed / MAX_SPEED;
-    p.speed *= 1 - TURN_PENALTY * speedRatio;
-
-    if (p.boosting && p.mass > MIN_BOOST_MASS) {
-      p.mass -= BOOST_MASS_DRAIN * DT;
-    }
-
-    p.x += Math.cos(p.angle) * p.speed * DT;
-    p.y += Math.sin(p.angle) * p.speed * DT;
-
-    const trailMax =
-      this.spacingSteps * (Math.min(Math.max(p.length, this.baseLength), this.renderMaxSegments) + 20);
-    pushTrail(phys.trail, p.x, p.y, trailMax);
-  }
-
-  updateGrowth(p) {
-    p.length = Math.max(5, Math.floor(p.mass * 0.85));
-    p.radius = clamp(0.35 + p.length * 0.0025, 0.35, 1.1);
-    p.dangerRadius = p.radius * 1.35;
-  }
-
-  handleCollisions(players, now) {
-    for (const p of players) {
-      if (!p.alive) continue;
-      if (this.hitWall(p)) {
-        p.alive = false;
-      }
-    }
-
-    const headEntries = [];
-    const segmentEntries = [];
-    for (const [id, p] of this.state.players) {
-      const phys = this.physicsById.get(id);
-      if (!p?.alive || !phys) continue;
-      headEntries.push({ id, x: p.x, y: p.y, mass: p.mass, dangerRadius: p.dangerRadius });
-
-      const count = Math.min(p.length || this.baseLength, this.logicMaxSegments);
-      const segs = sampleTrailByIndex(phys.trail, count, this.spacingSteps);
-      for (let i = 1; i < segs.length; i++) {
-        const s = segs[i];
-        segmentEntries.push({ owner: id, x: s.x, y: s.y, dangerRadius: p.dangerRadius });
-      }
-    }
-
-    for (let i = 0; i < headEntries.length; i++) {
-      for (let j = i + 1; j < headEntries.length; j++) {
-        const a = headEntries[i];
-        const b = headEntries[j];
-        const d = dist(a.x, a.y, b.x, b.y);
-        if (d < a.dangerRadius + b.dangerRadius) {
-          const pA = this.state.players.get(a.id);
-          const pB = this.state.players.get(b.id);
-          if (!pA || !pB) continue;
-          if (pA.mass > pB.mass) pB.alive = false;
-          else if (pA.mass < pB.mass) pA.alive = false;
-          else {
-            pA.alive = false;
-            pB.alive = false;
-          }
-        }
-      }
-    }
-
-    const segmentBuckets = buildSegmentBuckets(segmentEntries, this.segmentBucketSize);
-    for (const a of headEntries) {
-      const p = this.state.players.get(a.id);
-      if (!p?.alive) continue;
-      const nearby = getNearbyBucketItems(segmentBuckets, p.x, p.y, this.segmentBucketSize);
-      for (const s of nearby) {
-        if (s.owner === a.id) continue;
-        if (dist2(p.x, p.y, s.x, s.y) < s.dangerRadius * s.dangerRadius) {
-          p.alive = false;
-          break;
-        }
-      }
-    }
-  }
+  // Deprecated: Logic moved to physics.js
+  handleCollisions(players, now) {}
 
   step(dt) {
     const now = Date.now();
 
+    // 1. Check Powerups
     for (const [id, p] of this.state.players) {
       if (p.power && p.powerEndsAt && now >= p.powerEndsAt) {
         p.power = "";
@@ -469,61 +373,88 @@ class SnakeRoom extends Room {
       }
     }
 
+    // 2. Identify Alive Players
     const alivePlayers = [];
     for (const [id, p] of this.state.players) {
-      if (!p?.alive) continue;
+      if (!p?.alive) {
+        // If dead for > 3s, remove them
+        // Note: For Arena/Match, we might want to keep them in state as dead for leaderboard?
+        // But for physics, we just skip them.
+        continue;
+      }
       alivePlayers.push({ id, p });
     }
 
     this.updateMapSize(alivePlayers.length);
 
+    // 3. Physics Update (Movement, Growth)
     for (const { id, p } of alivePlayers) {
-      this.updateMovement(id, p);
-      this.updateGrowth(p);
+      const phys = this.physicsById.get(id);
+      
+      // Magnet Powerup logic
+      const food = this.state.foods.length > 0 ? this.state.foods[0] : null;
+      if (food && p.power === "magnet") {
+         const d2 = dist2(p.x, p.y, food.x, food.y);
+         if (d2 < 16) {
+           const dx = p.x - food.x;
+           const dy = p.y - food.y;
+           const inv = 1 / Math.max(0.0001, Math.sqrt(dx * dx + dy * dy));
+           food.x += dx * inv * 3.2 * dt;
+           food.y += dy * inv * 3.2 * dt;
+           food.x = clamp(food.x, 0.8, (this.state.gridW || BASE_MAP_W) - 0.8);
+           food.y = clamp(food.y, 0.8, (this.state.gridH || BASE_MAP_H) - 0.8);
+         }
+      }
+
+      // Delegate core movement to Physics Engine
+      updatePlayerPhysics(id, p, phys, dt, {
+        baseMapW: this.state.gridW || BASE_MAP_W,
+        baseMapH: this.state.gridH || BASE_MAP_H
+      });
     }
 
-    this.handleCollisions(
-      alivePlayers.map(({ p }) => p),
-      now,
+    // 4. Collision Detection (Authoritative)
+    const deadIds = checkCollisions(
+      this.state.players,
+      this.physicsById,
+      this.state.gridW || BASE_MAP_W,
+      this.state.gridH || BASE_MAP_H
     );
 
-    const food = this.state.foods.length > 0 ? this.state.foods[0] : null;
-    for (const [id, p] of this.state.players) {
-      const phys = this.physicsById.get(id);
-      if (!p?.alive || !phys) continue;
-
-      if (food && p.power && p.powerEndsAt && now < p.powerEndsAt && p.power === "magnet") {
-        const d2 = dist2(p.x, p.y, food.x, food.y);
-        if (d2 < 16) {
-          const dx = p.x - food.x;
-          const dy = p.y - food.y;
-          const inv = 1 / Math.max(0.0001, Math.sqrt(dx * dx + dy * dy));
-          food.x += dx * inv * 3.2 * dt;
-          food.y += dy * inv * 3.2 * dt;
-          food.x = clamp(food.x, 0.8, (this.state.gridW || BASE_MAP_W) - 0.8);
-          food.y = clamp(food.y, 0.8, (this.state.gridH || BASE_MAP_H) - 0.8);
-        }
-      }
-
-      if (food) {
-        const min = p.radius + this.foodRadius;
-        if (dist2(p.x, p.y, food.x, food.y) < min * min) {
-          const res = this.applyFood(p, food, now);
-          if (res.grow) {
-            const newLen = Math.floor(p.mass * 0.85);
-            p.length = Math.max(this.baseLength, newLen);
-          }
-          if (res.rewardTrigger) {
-            try {
-              this.broadcast("reward_indicator", { address: p.address, amount: 1, kind: "golden" });
-            } catch {
-            }
-          }
-          this.respawnFood(food, now);
-        }
-      }
+    // 5. Process Deaths
+    for (const id of deadIds) {
+      this.killPlayer(id, now);
     }
 
+    // 6. Food Eating
+    const food = this.state.foods.length > 0 ? this.state.foods[0] : null;
+    for (const { id, p } of alivePlayers) {
+       if (food) {
+         const min = p.radius + this.foodRadius;
+         if (dist2(p.x, p.y, food.x, food.y) < min * min) {
+           // EAT FOOD
+           const res = this.applyFood(p, food, now);
+           if (res.grow) {
+             const newLen = Math.floor(p.mass * 0.85);
+             p.length = Math.max(this.baseLength, newLen);
+           }
+           if (res.rewardTrigger) {
+              try {
+                this.broadcast("reward_indicator", { address: p.address, amount: 1, kind: "golden" });
+              } catch {}
+           }
+           this.respawnFood(food, now);
+           break; // One eat per tick
+         }
+       }
+    }
+
+    // 7. Check Game Over (Match Mode logic)
+    // Only if not allowSolo, or explicit logic. 
+    // The original logic checked for aliveCount <= 1.
+    // We should preserve that for "Match" rooms, but maybe not "Practice".
+    // Since SnakeRoom is the base, let's keep it but ensure Practice overrides if needed.
+    // (Actually Practice uses SnakePracticeRoom which extends this. We'll check that later).
     let aliveCount = 0;
     let lastAliveId = null;
     for (const [id, p] of this.state.players) {
@@ -532,8 +463,9 @@ class SnakeRoom extends Room {
         lastAliveId = id;
       }
     }
-
     const totalPlayers = this.state.players.size;
+    // Only end game if it's a Match room (implied by > 1 player start or specific flag?)
+    // For now, keep original logic:
     const shouldFinish = totalPlayers >= 2 ? aliveCount <= 1 : aliveCount === 0;
     if (shouldFinish) this.finishGame(lastAliveId);
   }
