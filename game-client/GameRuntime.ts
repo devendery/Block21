@@ -110,11 +110,10 @@ class GameRuntimeInstance {
   constructor(private opts: GameRuntimeOptions) {}
 
   updateCosmetics(skin: string, eyes: string, mouth: string) {
-    if (this.room) {
-        try {
-            this.room.send("cosmetic", { skin, eyes, mouth });
-        } catch {}
-    }
+    if (!this.room || this.destroyed) return;
+    try {
+      this.room.send("cosmetic", { skin, eyes, mouth });
+    } catch {}
   }
 
   async launch() {
@@ -259,9 +258,7 @@ class GameRuntimeInstance {
           
           // Create dummy object for camera follow
           this.dummyCam = this.add.image(0, 0, "__WHITE").setVisible(false);
-          // TEMP DEBUG: Disable follow smoothing
-          this.cameras.main.startFollow(this.dummyCam, true, 1.0, 1.0); 
-          // this.cameras.main.startFollow(this.dummyCam, true, 0.08, 0.08);
+          this.cameras.main.startFollow(this.dummyCam, true, 0.08, 0.08);
           this.cameras.main.setZoom(1.0);
           
           // Set bounds to world size
