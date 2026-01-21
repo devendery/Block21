@@ -298,7 +298,7 @@ export default function SnakeGame({ roomName = "snake_arena" }: { roomName?: str
       if (destroyed) return;
       
       const joinOptions: any = { address: joinAddress, skin, eyes, mouth };
-      if (roomName === "snake_practice") joinOptions.bots = 10;
+      if (roomName === "snake_practice") joinOptions.bots = 4;
       if (customPalette) joinOptions.customPalette = customPalette;
 
       startGame({
