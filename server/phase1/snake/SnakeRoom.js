@@ -3,14 +3,30 @@ const { Schema, MapSchema, ArraySchema, defineTypes } = require("@colyseus/schem
 const { FoodState } = require("./schema");
 const { pickFood } = require("./foodCatalog");
 const {
-  angleStep,
   buildSegmentBuckets,
   dist2,
   getNearbyBucketItems,
-  normalizeAngle,
   pushTrail,
   sampleTrailByIndex,
 } = require("./physics");
+
+const TICK_RATE = 20;
+const DT = 1 / TICK_RATE;
+
+const BASE_SPEED = 6.0;
+const MAX_SPEED = 9.0;
+const BOOST_MULT = 1.35;
+const BOOST_MASS_DRAIN = 1.0;
+const MIN_BOOST_MASS = 6;
+
+const MAX_TURN_RATE = 2.8; // rad/sec
+const TURN_PENALTY = 0.18;
+
+const ACCEL_TIME = 0.35;
+const DECEL_TIME = 0.2;
+
+const BASE_MAP_W = 96;
+const BASE_MAP_H = 56;
 
 class PlayerState extends Schema {
   constructor() {
@@ -18,6 +34,9 @@ class PlayerState extends Schema {
     this.address = "";
     this.alive = true;
     this.score = 0;
+    this.targetAngle = 0;
+    this.speed = 0;
+    this.mass = 0;
     this.skin = "classic";
     this.eyes = "cat";
     this.mouth = "tongue";
@@ -31,6 +50,9 @@ class PlayerState extends Schema {
     this.y = 0;
     this.angle = 0;
     this.length = 0;
+    this.boosting = false;
+    this.radius = 0.35;
+    this.dangerRadius = 0.45;
   }
 }
 
@@ -38,6 +60,9 @@ defineTypes(PlayerState, {
   address: "string",
   alive: "boolean",
   score: "int32",
+  targetAngle: "number",
+  speed: "number",
+  mass: "number",
   skin: "string",
   eyes: "string",
   mouth: "string",
@@ -51,6 +76,9 @@ defineTypes(PlayerState, {
   y: "number",
   angle: "number",
   length: "int32",
+  boosting: "boolean",
+  radius: "number",
+  dangerRadius: "number",
 });
 
 class SnakeState extends Schema {
@@ -61,6 +89,8 @@ class SnakeState extends Schema {
     this.status = "waiting";
     this.startedAt = 0;
     this.endedAt = 0;
+    this.gridW = BASE_MAP_W;
+    this.gridH = BASE_MAP_H;
   }
 }
 
@@ -70,6 +100,8 @@ defineTypes(SnakeState, {
   status: "string",
   startedAt: "int64",
   endedAt: "int64",
+  gridW: "number",
+  gridH: "number",
 });
 
 function randomInt(min, max) {
@@ -80,11 +112,25 @@ function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
 }
 
+function rotateTowards(a, b, max) {
+  let d = normalizeAngle(b - a);
+  d = clamp(d, -max, max);
+  return a + d;
+}
+
+function normalizeAngle(a) {
+  while (a > Math.PI) a -= Math.PI * 2;
+  while (a < -Math.PI) a += Math.PI * 2;
+  return a;
+}
+
+function dist(x1, y1, x2, y2) {
+  return Math.hypot(x2 - x1, y2 - y1);
+}
+
 class SnakeRoom extends Room {
   onCreate(options) {
     this.maxClients = 5;
-    this.gridW = 48;
-    this.gridH = 28;
     this.state = new SnakeState();
     this.roomIdExternal = options && typeof options.roomId === "string" ? options.roomId : null;
     this.rewardsEnabled = true;
@@ -97,46 +143,39 @@ class SnakeRoom extends Room {
           ? false
           : process.env.NODE_ENV !== "production";
 
-    this.fixedStepMs = 1000 / 60;
+    this.fixedStepMs = 1000 / TICK_RATE;
     this.accumMs = 0;
 
-    this.baseLength = 22;
+    this.baseLength = 5; // Minimum length 5
     this.logicMaxSegments = 240;
     this.renderMaxSegments = 140;
     this.spacingSteps = 5;
 
-    this.headRadius = 0.45;
-    this.bodyRadius = 0.4;
     this.foodRadius = 0.38;
     this.segmentBucketSize = 1.0;
-
-    this.turnSpeed = 7.4;
-    this.accel = 22;
-    this.frictionPerStep = 0.92;
-    this.maxSpeed = 10.2;
 
     this.physicsById = new Map();
 
     this.onMessage("input", (client, message) => {
       const p = this.state.players.get(client.sessionId);
-      const phys = this.physicsById.get(client.sessionId);
-      if (!p || !phys || !p.alive) return;
+      if (!p || !p.alive) return;
       const t = typeof message?.targetAngle === "number" ? message.targetAngle : null;
-      if (t !== null && Number.isFinite(t)) phys.targetAngle = normalizeAngle(t);
-      phys.boost = Boolean(message?.boost);
-      phys.lastInputAt = Date.now();
+      if (t !== null && Number.isFinite(t)) p.targetAngle = normalizeAngle(t);
+      p.boosting = Boolean(message?.boost);
+      const phys = this.physicsById.get(client.sessionId);
+      if (phys) phys.lastInputAt = Date.now();
     });
 
     this.onMessage("dir", (client, message) => {
       const p = this.state.players.get(client.sessionId);
-      const phys = this.physicsById.get(client.sessionId);
-      if (!p || !phys || !p.alive) return;
+      if (!p || !p.alive) return;
       const dir = message && typeof message.dir === "string" ? message.dir : "";
-      if (dir === "right") phys.targetAngle = 0;
-      if (dir === "down") phys.targetAngle = Math.PI / 2;
-      if (dir === "left") phys.targetAngle = Math.PI;
-      if (dir === "up") phys.targetAngle = -Math.PI / 2;
-      phys.lastInputAt = Date.now();
+      if (dir === "right") p.targetAngle = 0;
+      if (dir === "down") p.targetAngle = Math.PI / 2;
+      if (dir === "left") p.targetAngle = Math.PI;
+      if (dir === "up") p.targetAngle = -Math.PI / 2;
+      const phys = this.physicsById.get(client.sessionId);
+      if (phys) phys.lastInputAt = Date.now();
     });
 
     this.onMessage("cosmetic", (client, message) => {
@@ -158,12 +197,15 @@ class SnakeRoom extends Room {
     player.alive = true;
     player.score = 0;
     player.length = this.baseLength;
+    player.mass = 10;
+    player.speed = 0;
+    player.boosting = false;
     if (options && typeof options.skin === "string") player.skin = options.skin;
     if (options && typeof options.eyes === "string") player.eyes = options.eyes;
     if (options && typeof options.mouth === "string") player.mouth = options.mouth;
 
     this.state.players.set(client.sessionId, player);
-    this.physicsById.set(client.sessionId, { vx: 0, vy: 0, targetAngle: 0, boost: false, trail: [], lastInputAt: Date.now() });
+    this.physicsById.set(client.sessionId, { trail: [], lastInputAt: Date.now() });
     this.spawnPlayer(client.sessionId);
 
     const minPlayers = this.allowSolo ? 1 : 2;
@@ -203,8 +245,12 @@ class SnakeRoom extends Room {
   }
 
   randomSpawnPoint() {
-    const x = randomInt(2, this.gridW - 3) + 0.5;
-    const y = randomInt(2, this.gridH - 3) + 0.5;
+    const w = this.state.gridW || BASE_MAP_W;
+    const h = this.state.gridH || BASE_MAP_H;
+    const maxX = Math.max(6, Math.floor(w) - 3);
+    const maxY = Math.max(6, Math.floor(h) - 3);
+    const x = randomInt(2, maxX) + 0.5;
+    const y = randomInt(2, maxY) + 0.5;
     return { x, y };
   }
 
@@ -218,37 +264,35 @@ class SnakeRoom extends Room {
 
     if (rarity === "common") {
       p.score += 10 * scoreMult;
-      return { grow: true, rewardTrigger: false };
-    }
-
-    if (rarity === "rare") {
+      p.mass += 1;
+    } else if (rarity === "rare") {
       p.score += 25 * scoreMult;
+      p.mass += 3;
       if (this.rewardsEnabled) {
         p.rewardMultBps = Math.min(2000, (p.rewardMultBps || 0) + 50);
       }
-      return { grow: true, rewardTrigger: false };
-    }
-
-    if (rarity === "epic") {
+    } else if (rarity === "epic") {
       p.score += 35 * scoreMult;
+      p.mass += 7;
       if (food.power === "shield") p.shield = true;
       p.power = food.power || "";
       p.powerEndsAt = now + 8000;
-      return { grow: true, rewardTrigger: false };
-    }
-
-    if (rarity === "golden") {
+    } else if (rarity === "golden") {
       p.score += 100 * scoreMult;
-      if (!this.rewardsEnabled) return { grow: true, rewardTrigger: false };
-      while (this.goldenRewardTimes.length > 0 && now - this.goldenRewardTimes[0] > 180_000) this.goldenRewardTimes.shift();
-      if (this.goldenRewardTimes.length < 2) {
+      p.mass += 15;
+      if (this.rewardsEnabled && (this.goldenRewardTimes.length < 2)) {
         this.goldenRewardTimes.push(now);
         return { grow: true, rewardTrigger: true };
       }
-      return { grow: true, rewardTrigger: false };
     }
 
-    p.score += 10 * scoreMult;
+    // Recalculate length based on mass
+    // Length = floor(mass * 0.85), Min 5
+    // Need to account for base mass? Let's assume mass starts at 0 and base length is handled.
+    // Actually, "Minimum length: 5 segments".
+    // Let's use p.length directly derived from mass.
+    // If mass starts at 0, length is 5.
+    
     return { grow: true, rewardTrigger: false };
   }
 
@@ -270,11 +314,11 @@ class SnakeRoom extends Room {
     p.x = start.x;
     p.y = start.y;
     p.angle = randomInt(0, 360) * (Math.PI / 180);
-    p.length = Math.max(this.baseLength, p.length || this.baseLength);
-    phys.vx = 0;
-    phys.vy = 0;
-    phys.targetAngle = p.angle;
-    phys.boost = false;
+    p.targetAngle = p.angle;
+    p.speed = 0;
+    p.mass = 10;
+    p.boosting = false;
+    p.length = Math.max(this.baseLength, Math.floor(p.mass * 0.85));
     phys.trail.length = 0;
     const trailMax = this.spacingSteps * (Math.min(p.length, this.renderMaxSegments) + 12);
     for (let i = 0; i < trailMax; i++) pushTrail(phys.trail, p.x, p.y, trailMax);
@@ -295,59 +339,74 @@ class SnakeRoom extends Room {
   killPlayer(id, now) {
     const p = this.state.players.get(id);
     if (!p) return;
-    if (p.shield && p.power === "shield" && p.powerEndsAt && now < p.powerEndsAt) {
-      p.shield = false;
-      p.power = "";
-      p.powerEndsAt = 0;
-      return;
-    }
     p.alive = false;
   }
 
-  step(dt) {
-    const now = Date.now();
+  updateMapSize(aliveCount) {
+    const scale = clamp(1 + (aliveCount - 5) * 0.06, 1, 1.8);
+    this.state.gridW = BASE_MAP_W * scale;
+    this.state.gridH = BASE_MAP_H * scale;
 
-    for (const [id, p] of this.state.players) {
-      const phys = this.physicsById.get(id);
-      if (!p || !phys) continue;
+    if (aliveCount <= 5) {
+      this.state.gridW -= 0.15 * DT;
+      this.state.gridH -= 0.15 * DT;
+    }
+  }
 
-      if (p.power && p.powerEndsAt && now >= p.powerEndsAt) {
-        p.power = "";
-        p.powerEndsAt = 0;
-        p.shield = false;
-      }
+  hitWall(p) {
+    const w = this.state.gridW || BASE_MAP_W;
+    const h = this.state.gridH || BASE_MAP_H;
+    return (
+      p.x < p.dangerRadius ||
+      p.x > w - p.dangerRadius ||
+      p.y < p.dangerRadius ||
+      p.y > h - p.dangerRadius
+    );
+  }
+
+  updateMovement(id, p) {
+    const phys = this.physicsById.get(id);
+    if (!phys) return;
+
+    const maxTurn = MAX_TURN_RATE * DT;
+    p.angle = rotateTowards(p.angle, p.targetAngle, maxTurn);
+
+    let targetSpeed = BASE_SPEED;
+    if (p.boosting && p.mass > MIN_BOOST_MASS) {
+      targetSpeed *= BOOST_MULT;
+    }
+
+    const accelT = clamp(Math.abs(targetSpeed - p.speed) / targetSpeed, 0, 1);
+    const eased = 1 - Math.pow(1 - accelT, 2);
+    p.speed += (targetSpeed - p.speed) * eased;
+
+    const speedRatio = p.speed / MAX_SPEED;
+    p.speed *= 1 - TURN_PENALTY * speedRatio;
+
+    if (p.boosting && p.mass > MIN_BOOST_MASS) {
+      p.mass -= BOOST_MASS_DRAIN * DT;
+    }
+
+    p.x += Math.cos(p.angle) * p.speed * DT;
+    p.y += Math.sin(p.angle) * p.speed * DT;
+
+    const trailMax =
+      this.spacingSteps * (Math.min(Math.max(p.length, this.baseLength), this.renderMaxSegments) + 20);
+    pushTrail(phys.trail, p.x, p.y, trailMax);
+  }
+
+  updateGrowth(p) {
+    p.length = Math.max(5, Math.floor(p.mass * 0.85));
+    p.radius = clamp(0.35 + p.length * 0.0025, 0.35, 1.1);
+    p.dangerRadius = p.radius * 1.35;
+  }
+
+  handleCollisions(players, now) {
+    for (const p of players) {
       if (!p.alive) continue;
-
-      const isSpeed = p.power && p.powerEndsAt && now < p.powerEndsAt && p.power === "speed";
-      const boost = Boolean(phys.boost) || Boolean(isSpeed);
-      const turn = this.turnSpeed * (boost ? 0.72 : 1.0);
-      const accel = this.accel * (boost ? 1.35 : 1.0);
-      const maxSpeed = this.maxSpeed * (boost ? 1.25 : 1.0);
-
-      p.angle = angleStep(p.angle, phys.targetAngle, turn, dt);
-
-      phys.vx += Math.cos(p.angle) * accel * dt;
-      phys.vy += Math.sin(p.angle) * accel * dt;
-
-      const friction = boost ? Math.max(0.86, this.frictionPerStep - 0.03) : this.frictionPerStep;
-      phys.vx *= friction;
-      phys.vy *= friction;
-
-      const sp = Math.sqrt(phys.vx * phys.vx + phys.vy * phys.vy);
-      if (sp > maxSpeed) {
-        const s = maxSpeed / sp;
-        phys.vx *= s;
-        phys.vy *= s;
+      if (this.hitWall(p)) {
+        p.alive = false;
       }
-
-      p.x += phys.vx * dt;
-      p.y += phys.vy * dt;
-
-      const trailMax = this.spacingSteps * (Math.min(Math.max(p.length, this.baseLength), this.renderMaxSegments) + 20);
-      pushTrail(phys.trail, p.x, p.y, trailMax);
-
-      const hitWall = p.x < 0.5 || p.x > this.gridW - 0.5 || p.y < 0.5 || p.y > this.gridH - 0.5;
-      if (hitWall) this.killPlayer(id, now);
     }
 
     const headEntries = [];
@@ -355,33 +414,13 @@ class SnakeRoom extends Room {
     for (const [id, p] of this.state.players) {
       const phys = this.physicsById.get(id);
       if (!p?.alive || !phys) continue;
-      headEntries.push({ id, x: p.x, y: p.y });
+      headEntries.push({ id, x: p.x, y: p.y, mass: p.mass, dangerRadius: p.dangerRadius });
+
       const count = Math.min(p.length || this.baseLength, this.logicMaxSegments);
       const segs = sampleTrailByIndex(phys.trail, count, this.spacingSteps);
-      for (let i = 8; i < segs.length; i++) {
+      for (let i = 1; i < segs.length; i++) {
         const s = segs[i];
-        segmentEntries.push({ owner: id, index: i, x: s.x, y: s.y });
-      }
-    }
-
-    const segmentBuckets = buildSegmentBuckets(segmentEntries, this.segmentBucketSize);
-
-    for (const a of headEntries) {
-      const p = this.state.players.get(a.id);
-      if (!p || !p.alive) continue;
-      const nearby = getNearbyBucketItems(segmentBuckets, p.x, p.y, this.segmentBucketSize);
-      for (const s of nearby) {
-        const min = this.headRadius + this.bodyRadius;
-        if (dist2(p.x, p.y, s.x, s.y) < min * min) {
-          if (s.owner !== a.id) {
-            this.killPlayer(a.id, now);
-            break;
-          }
-          if (s.owner === a.id && s.index > 18) {
-            this.killPlayer(a.id, now);
-            break;
-          }
-        }
+        segmentEntries.push({ owner: id, x: s.x, y: s.y, dangerRadius: p.dangerRadius });
       }
     }
 
@@ -389,13 +428,64 @@ class SnakeRoom extends Room {
       for (let j = i + 1; j < headEntries.length; j++) {
         const a = headEntries[i];
         const b = headEntries[j];
-        const min = this.headRadius * 2;
-        if (dist2(a.x, a.y, b.x, b.y) < min * min) {
-          this.killPlayer(a.id, now);
-          this.killPlayer(b.id, now);
+        const d = dist(a.x, a.y, b.x, b.y);
+        if (d < a.dangerRadius + b.dangerRadius) {
+          const pA = this.state.players.get(a.id);
+          const pB = this.state.players.get(b.id);
+          if (!pA || !pB) continue;
+          if (pA.mass > pB.mass) pB.alive = false;
+          else if (pA.mass < pB.mass) pA.alive = false;
+          else {
+            pA.alive = false;
+            pB.alive = false;
+          }
         }
       }
     }
+
+    const segmentBuckets = buildSegmentBuckets(segmentEntries, this.segmentBucketSize);
+    for (const a of headEntries) {
+      const p = this.state.players.get(a.id);
+      if (!p?.alive) continue;
+      const nearby = getNearbyBucketItems(segmentBuckets, p.x, p.y, this.segmentBucketSize);
+      for (const s of nearby) {
+        if (s.owner === a.id) continue;
+        if (dist2(p.x, p.y, s.x, s.y) < s.dangerRadius * s.dangerRadius) {
+          p.alive = false;
+          break;
+        }
+      }
+    }
+  }
+
+  step(dt) {
+    const now = Date.now();
+
+    for (const [id, p] of this.state.players) {
+      if (p.power && p.powerEndsAt && now >= p.powerEndsAt) {
+        p.power = "";
+        p.powerEndsAt = 0;
+        p.shield = false;
+      }
+    }
+
+    const alivePlayers = [];
+    for (const [id, p] of this.state.players) {
+      if (!p?.alive) continue;
+      alivePlayers.push({ id, p });
+    }
+
+    this.updateMapSize(alivePlayers.length);
+
+    for (const { id, p } of alivePlayers) {
+      this.updateMovement(id, p);
+      this.updateGrowth(p);
+    }
+
+    this.handleCollisions(
+      alivePlayers.map(({ p }) => p),
+      now,
+    );
 
     const food = this.state.foods.length > 0 ? this.state.foods[0] : null;
     for (const [id, p] of this.state.players) {
@@ -410,16 +500,19 @@ class SnakeRoom extends Room {
           const inv = 1 / Math.max(0.0001, Math.sqrt(dx * dx + dy * dy));
           food.x += dx * inv * 3.2 * dt;
           food.y += dy * inv * 3.2 * dt;
-          food.x = clamp(food.x, 0.8, this.gridW - 0.8);
-          food.y = clamp(food.y, 0.8, this.gridH - 0.8);
+          food.x = clamp(food.x, 0.8, (this.state.gridW || BASE_MAP_W) - 0.8);
+          food.y = clamp(food.y, 0.8, (this.state.gridH || BASE_MAP_H) - 0.8);
         }
       }
 
       if (food) {
-        const min = this.headRadius + this.foodRadius;
+        const min = p.radius + this.foodRadius;
         if (dist2(p.x, p.y, food.x, food.y) < min * min) {
           const res = this.applyFood(p, food, now);
-          if (res.grow) p.length = Math.min(10_000, (p.length || this.baseLength) + 1);
+          if (res.grow) {
+            const newLen = Math.floor(p.mass * 0.85);
+            p.length = Math.max(this.baseLength, newLen);
+          }
           if (res.rewardTrigger) {
             try {
               this.broadcast("reward_indicator", { address: p.address, amount: 1, kind: "golden" });
