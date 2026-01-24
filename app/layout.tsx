@@ -53,7 +53,7 @@ export default function RootLayout({
         <div className="bg-tech opacity-30" aria-hidden="true" />
         <Web3Providers>
           <Navbar />
-          <main className="flex-grow relative z-10">{children}</main>
+          <main className="flex-grow flex flex-col relative z-10">{children}</main>
           <Footer />
         </Web3Providers>
       </body>

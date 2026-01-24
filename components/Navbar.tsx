@@ -10,19 +10,22 @@ import WalletConnect from "./WalletConnect";
 
 const navItems = [
   { name: "Home", href: "/" },
+  { name: "Play", href: "/play" },
   { name: "Market", href: "/market" },
   { name: "Roadmap", href: "/roadmap" },
   { name: "Transparency", href: "/transparency" },
   { name: "User Experience", href: "/user-experience" },
   { name: "Whitepaper", href: "/whitepaper" },
   { name: "Pitch Deck", href: "/pitch" },
-  { name: "Play", href: "/play" },
   { name: "Learn", href: "/learn" },
 ];
 
 export default function Navbar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+
+  // Hide Navbar on Game Page
+  if (pathname === '/play') return null;
 
   return (
     <nav className="border-b border-white/10 sticky top-0 z-50 bg-black/60 backdrop-blur-md overflow-hidden relative">

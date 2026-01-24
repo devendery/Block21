@@ -6,10 +6,15 @@ import InstitutionalB21Logo from "@/components/ui/InstitutionalB21Logo";
 import { Instagram, AtSign, Send, Loader2, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
 import { GOOGLE_SCRIPT_URL } from "@/lib/utils";
+import { usePathname } from "next/navigation";
 
 export default function Footer() {
+  const pathname = usePathname();
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+
+  // Hide Footer on Game Page
+  if (pathname === '/play') return null;
 
   const handleSubscribe = async () => {
     if (!email || !email.includes("@")) {
