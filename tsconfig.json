@@ -22,9 +22,15 @@
         "name": "next"
       }
     ],
+    "baseUrl": ".",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": false,
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@game/*": [
+        "lib/game/*"
       ]
     }
   },

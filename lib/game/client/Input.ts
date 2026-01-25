@@ -49,15 +49,11 @@ export class InputManager {
     const dy = pointer.y - centerY;
 
     // Only update if pointer is active or moved significantly
-    const deadZone = 40; 
+    const deadZone = 10; 
     if (Math.abs(dx) > deadZone || Math.abs(dy) > deadZone) {
        this.inputVector = normalize({ x: dx, y: dy });
-    } else {
-        // If inside deadzone, keep previous vector (don't update) -> snake keeps moving straight
-        // Wait, if we return (0,0), Snake.ts ignores it. 
-        // So we just return (0,0).
-        this.inputVector = { x: 0, y: 0 };
     }
+    // else: Keep previous vector (don't update) -> snake keeps moving straight
 
     return { vector: this.inputVector, boost: this.isBoosting };
   }

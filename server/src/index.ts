@@ -2,43 +2,51 @@ import http from "http";
 import express from "express";
 import cors from "cors";
 import { Server, Room, Client } from "colyseus";
-import { monitor } from "@colyseus/monitor";
+// import { monitor } from "@colyseus/monitor";
 import { GameState, Player, SnakeSegment, Food } from "./State";
 import { SnakeLogic } from "./Snake";
 import { PhysicsConfig, checkCircleCollision } from "./Physics";
 
 class Block21Room extends Room<GameState> {
   // Game Loop
-  static TICK_RATE = 20; // 50ms per tick (Server Authority)
+  static TICK_RATE = 60; // 60Hz for smoother gameplay
   
   // Store SnakeLogic instances (Physics engines) separately from State
   // State is for syncing, Logic is for calculating
   snakes: Map<string, SnakeLogic> = new Map();
 
-  onCreate (options: any) {
+    onCreate (options: any) {
     console.log("Block21 Room Created!");
     this.setState(new GameState());
+    console.log("SERVER GameState fields:", Object.keys(this.state));
+
+    // Message Handlers
+    this.onMessage("input", (client, input) => {
+        console.log("SERVER INPUT from", client.sessionId, input);
+
+        const snake = this.snakes.get(client.sessionId);
+        if (!snake) {
+            console.log("NO SNAKE FOUND FOR", client.sessionId);
+            return;
+        }
+
+        snake.lastInput = input;
+    });
+
+    // ✅ SINGLE game loop
+    this.setSimulationInterval(
+        (deltaTime) => this.update(deltaTime),
+        1000 / Block21Room.TICK_RATE
+    );
 
     // Initial Food Spawn
     for (let i = 0; i < 50; i++) {
         this.spawnFood();
     }
-
-    // Game Loop
-    this.setSimulationInterval((deltaTime) => this.update(deltaTime), 1000 / Block21Room.TICK_RATE);
-
-    // Message Handlers
-    this.onMessage("input", (client, input) => {
-        // input: { vector: {x,y}, boost: boolean }
-        const snake = this.snakes.get(client.sessionId);
-        if (snake) {
-            // Update physics immediately? No, queue it?
-            // For now, let's just store the latest input on the snake logic
-            // Ideally we'd have an input queue for reconciliation, but for Phase 2 start simple.
-            snake.update(50/1000, input); // Update physics state
-        }
-    });
   }
+ 
+  
+
 
   onJoin (client: Client, options: any) {
     console.log(client.sessionId, "joined!");
@@ -55,6 +63,9 @@ class Block21Room extends Room<GameState> {
 
     // Initialize Physics Logic for this player
     const snakeLogic = new SnakeLogic(player);
+    // Initialize segments AFTER player is attached to state (Crucial for Schema Graph)
+    snakeLogic.initSegments();
+    
     this.snakes.set(client.sessionId, snakeLogic);
   }
 
@@ -74,9 +85,13 @@ class Block21Room extends Room<GameState> {
 
     // Update all snakes
     this.snakes.forEach((snake, sessionId) => {
-        snake.update(dt, { vector: { x: snake.player.dirX, y: snake.player.dirY }, boost: snake.player.speed > PhysicsConfig.BASE_SPEED }); 
-        // Note: The input handling above is temporary; in reality, we use the stored input from onMessage.
-        // But since SnakeLogic stores its own dirX/dirY, passing them back effectively maintains inertia.
+        // ✅ USE LAST INPUT FROM CLIENT
+        const input = snake.lastInput ?? { 
+            vector: { x: snake.player.dirX, y: snake.player.dirY }, 
+            boost: false 
+        };
+
+        snake.update(dt, input); 
         
         // Check Food Collision
         this.checkFoodCollision(snake);
@@ -135,28 +150,36 @@ class Block21Room extends Room<GameState> {
             this.state.food.set(id, food);
         }
     });
-    
-    // Respawn or Remove?
-    // For now, let's remove and let client rejoin or respawn logic handle it.
-    // Actually, usually in .io games, you see the "Game Over" screen.
-    // So we keep the player but leave them dead?
-    // Let's just remove them from the room for now to keep it simple.
-    // Or better, reset them.
-    
-    // Reset Player
-    snake.player.alive = true;
-    snake.player.x = Math.random() * 1000 - 500;
-    snake.player.y = Math.random() * 1000 - 500;
-    snake.player.segments.clear();
-    snake.player.history = []; // Clear history
-    
-    // Re-init segments
-    // We need to re-run constructor logic basically.
-    // Easier to just destroy and create new SnakeLogic?
-    // But we need to keep the session.
-    
-    // Let's just re-init the snake logic
-    this.snakes.set(sessionId, new SnakeLogic(snake.player));
+
+    const oldPlayer = snake.player;
+    const playerName = oldPlayer.name;
+
+    console.log("Killing snake:", sessionId);
+
+    // 1️⃣ FULLY REMOVE PLAYER (forces client onRemove)
+    this.state.players.delete(sessionId);
+    this.snakes.delete(sessionId);
+
+    // 2️⃣ RESPAWN AFTER SHORT DELAY
+    this.clock.setTimeout(() => {
+        console.log("Respawning snake:", sessionId);
+
+        const player = new Player();
+        player.id = sessionId;
+        player.name = playerName;
+        player.x = Math.random() * 1000 - 500;
+        player.y = Math.random() * 1000 - 500;
+        player.angle = Math.random() * Math.PI * 2;
+        player.alive = true;
+
+        // 3️⃣ ADD BACK TO STATE (forces client onAdd)
+        this.state.players.set(sessionId, player);
+
+        const logic = new SnakeLogic(player);
+        logic.initSegments();
+
+        this.snakes.set(sessionId, logic);
+    }, 200);
   }
 }
 
@@ -170,7 +193,7 @@ const gameServer = new Server({
 
 gameServer.define('block21', Block21Room);
 
-app.use("/colyseus", monitor());
+// app.use("/colyseus", monitor());
 
 gameServer.listen(2567);
 console.log(`Listening on ws://localhost:2567`);

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { PhysicsConfig, VisualConfig } from '../core/Physics';
+import { Player, SnakeSegment } from './ClientState';
 
 export interface ISnakeState {
     x: number;
@@ -7,21 +8,32 @@ export interface ISnakeState {
     angle: number;
     alive: boolean;
     speed: number;
-    segments: { x: number, y: number }[];
+    segments: SnakeSegment[];
 }
 
 export class SnakeRenderer {
   private scene: Phaser.Scene;
   private headGraphics: Phaser.GameObjects.Graphics;
   private bodyGraphics: Phaser.GameObjects.Graphics;
-  private snake: ISnakeState;
+  private snake: Player; // Use actual schema type
   
   // Visual polish: Shadow
   private shadowGraphics: Phaser.GameObjects.Graphics;
 
-  constructor(scene: Phaser.Scene, snake: ISnakeState) {
+  // Interpolation State
+  public displayX: number = 0;
+  public displayY: number = 0;
+  public displayAngle: number = 0;
+  private displaySegments: { x: number, y: number }[] = [];
+
+  constructor(scene: Phaser.Scene, snake: Player) { // Use actual schema type
     this.scene = scene;
     this.snake = snake;
+
+    // Initialize display state
+    this.displayX = snake.x;
+    this.displayY = snake.y;
+    this.displayAngle = snake.angle;
 
     // Layering: Shadow < Body < Head
     this.shadowGraphics = scene.add.graphics();
@@ -36,10 +48,67 @@ export class SnakeRenderer {
   }
 
   update() {
-    this.clear();
-    this.drawShadows();
-    this.drawBody();
-    this.drawHead();
+    try {
+        // Interpolation Factor (0.0 - 1.0)
+        // Lower = Smoother but more lag (0.1)
+        // Higher = Snappier but more jitter (0.5)
+        // 0.3 is a good balance for 20-60Hz
+        const t = 0.3; 
+
+        // Teleport Detection (Respawn)
+        const dist = Phaser.Math.Distance.Between(this.displayX, this.displayY, this.snake.x, this.snake.y);
+        if (dist > 100) { // Lower threshold to catch shorter respawn jumps
+            // Snap immediately if distance is too large (teleport/respawn)
+            this.displayX = this.snake.x;
+            this.displayY = this.snake.y;
+            this.displayAngle = this.snake.angle;
+            
+            // Also snap segments
+            this.displaySegments = []; // Clear current display segments
+            for (let i = 0; i < this.snake.segments.length; i++) {
+                this.displaySegments.push({ x: this.snake.segments[i].x, y: this.snake.segments[i].y });
+            }
+        } else {
+            // Interpolate normally
+            this.displayX = Phaser.Math.Linear(this.displayX, this.snake.x, t);
+            this.displayY = Phaser.Math.Linear(this.displayY, this.snake.y, t);
+            this.displayAngle = Phaser.Math.Angle.RotateTo(this.displayAngle, this.snake.angle, t);
+        }
+
+        // Sync Segment Count
+        while (this.displaySegments.length < this.snake.segments.length) {
+            const i = this.displaySegments.length;
+            // Init new segment at target position to avoid flying in from (0,0)
+            const targetSeg = this.snake.segments[i];
+            // Safety check for targetSeg
+            if (targetSeg) {
+                this.displaySegments.push({ x: targetSeg.x, y: targetSeg.y });
+            } else {
+                 // Fallback if segment missing (shouldn't happen)
+                 this.displaySegments.push({ x: this.displayX, y: this.displayY });
+            }
+        }
+        while (this.displaySegments.length > this.snake.segments.length) {
+            this.displaySegments.pop();
+        }
+
+        // Interpolate Segments
+        for (let i = 0; i < this.snake.segments.length; i++) {
+            const target = this.snake.segments[i];
+            const current = this.displaySegments[i];
+            if (target && current) {
+                current.x = Phaser.Math.Linear(current.x, target.x, t);
+                current.y = Phaser.Math.Linear(current.y, target.y, t);
+            }
+        }
+
+        this.clear();
+        this.drawShadows();
+        this.drawBody();
+        this.drawHead();
+    } catch (e) {
+        console.error("SnakeRenderer Update Error:", e);
+    }
   }
 
   private clear() {
@@ -62,7 +131,7 @@ export class SnakeRenderer {
     // Ideally Snake class should have isBoosting property.
     
     // Quick Fix: Check speed to determine boost visual
-    const isBoosting = this.snake.speed > PhysicsConfig.BASE_SPEED + 10;
+    const isBoosting = this.snake.isBoosting;
     
     const baseCoreColor = 0xFF0033;
     const boostCoreColor = 0xFF5577; // Brighter/Whiter Red
@@ -78,7 +147,7 @@ export class SnakeRenderer {
     
     // Draw Hexagon Head
     const r = VisualConfig.RENDER_RADIUS;
-    const angle = this.snake.angle;
+    const angle = this.displayAngle; // USE INTERPOLATED ANGLE
     
     // Points for a "Coffin" or "Hex" shape pointing forward
     const points = [
@@ -93,8 +162,8 @@ export class SnakeRenderer {
     // Rotate and Translate points
     const rotatedPoints = points.map(p => {
         return {
-            x: this.snake.x + p.x * Math.cos(angle) - p.y * Math.sin(angle),
-            y: this.snake.y + p.x * Math.sin(angle) + p.y * Math.cos(angle)
+            x: this.displayX + p.x * Math.cos(angle) - p.y * Math.sin(angle), // USE INTERPOLATED POS
+            y: this.displayY + p.x * Math.sin(angle) + p.y * Math.cos(angle)
         };
     });
     
@@ -121,8 +190,8 @@ export class SnakeRenderer {
     ];
     const rotatedCore = corePoints.map(p => {
         return {
-            x: this.snake.x + p.x * Math.cos(angle) - p.y * Math.sin(angle),
-            y: this.snake.y + p.x * Math.sin(angle) + p.y * Math.cos(angle)
+            x: this.displayX + p.x * Math.cos(angle) - p.y * Math.sin(angle),
+            y: this.displayY + p.x * Math.sin(angle) + p.y * Math.cos(angle)
         };
     });
     
@@ -140,10 +209,10 @@ export class SnakeRenderer {
     const eyeRadius = 4;
     
     // Calculate eye positions
-    const leftEyeX = this.snake.x + Math.cos(angle - 0.6) * eyeOffset;
-    const leftEyeY = this.snake.y + Math.sin(angle - 0.6) * eyeOffset;
-    const rightEyeX = this.snake.x + Math.cos(angle + 0.6) * eyeOffset;
-    const rightEyeY = this.snake.y + Math.sin(angle + 0.6) * eyeOffset;
+    const leftEyeX = this.displayX + Math.cos(angle - 0.6) * eyeOffset;
+    const leftEyeY = this.displayY + Math.sin(angle - 0.6) * eyeOffset;
+    const rightEyeX = this.displayX + Math.cos(angle + 0.6) * eyeOffset;
+    const rightEyeY = this.displayY + Math.sin(angle + 0.6) * eyeOffset;
 
     // Outer Eye Ring (Dark Metal)
     this.headGraphics.fillStyle(0x000000, 1);
@@ -193,10 +262,10 @@ export class SnakeRenderer {
     
     const outlineColor = 0x262626;
     
-    const totalSegments = this.snake.segments.length;
+    const totalSegments = this.displaySegments.length; // Use displaySegments
     
     for (let i = totalSegments - 1; i >= 0; i--) {
-      const seg = this.snake.segments[i];
+      const seg = this.displaySegments[i]; // Use displaySegments
       
       // Calculate Tapering (Quadratic Ease-Out)
       // Start of visual tapering (index-based)
@@ -236,12 +305,12 @@ export class SnakeRenderer {
     const shadowOffset = 10; 
     
     // Head Shadow
-    this.shadowGraphics.fillCircle(this.snake.x + shadowOffset, this.snake.y + shadowOffset, VisualConfig.RENDER_RADIUS);
+    this.shadowGraphics.fillCircle(this.displayX + shadowOffset, this.displayY + shadowOffset, VisualConfig.RENDER_RADIUS);
 
     // Body Shadows (Tapered)
-    const totalSegments = this.snake.segments.length;
+    const totalSegments = this.displaySegments.length;
     for (let i = totalSegments - 1; i >= 0; i--) {
-        const seg = this.snake.segments[i];
+        const seg = this.displaySegments[i];
         
         // Match taper logic (Same as body)
         const taperStartIndex = Math.floor(totalSegments * VisualConfig.TAIL_TAPER_START);
@@ -251,6 +320,9 @@ export class SnakeRenderer {
         const scale = 1 - smoothT * (1 - VisualConfig.TAIL_MIN_SCALE);
         
         const radius = VisualConfig.RENDER_RADIUS * scale;
+        
+        const shadowAlpha = VisualConfig.SHADOW_ALPHA * scale; 
+        this.shadowGraphics.fillStyle(0x000000, shadowAlpha);
         this.shadowGraphics.fillCircle(seg.x + shadowOffset, seg.y + shadowOffset, radius);
     }
   }

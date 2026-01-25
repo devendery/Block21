@@ -7,6 +7,9 @@ export class SnakeLogic {
   // Direction Inertia (Golden Rule: Direction is persistent)
   private dirX: number = 1;
   private dirY: number = 0;
+  
+  // Stored Input for Physics Loop
+  public lastInput: { vector: Vector2, boost: boolean } | null = null;
 
   constructor(player: Player) {
     this.player = player;
@@ -15,16 +18,19 @@ export class SnakeLogic {
     // Initialize Physics State
     this.dirX = Math.cos(player.angle);
     this.dirY = Math.sin(player.angle);
-    
+  }
+
+  initSegments() {
     // Initialize segments if empty
     if (this.player.segments.length === 0) {
         for (let i = 0; i < 20; i++) {
-            const segX = player.x - (i * PhysicsConfig.SEGMENT_DISTANCE);
+            const segX = this.player.x - (i * PhysicsConfig.SEGMENT_DISTANCE * this.dirX);
+            const segY = this.player.y - (i * PhysicsConfig.SEGMENT_DISTANCE * this.dirY);
             const seg = new SnakeSegment();
             seg.x = segX;
-            seg.y = player.y;
+            seg.y = segY;
             this.player.segments.push(seg);
-            this.player.history.push({ x: segX, y: player.y });
+            this.player.history.push({ x: segX, y: segY });
         }
     }
   }
@@ -35,6 +41,7 @@ export class SnakeLogic {
     const inputVector = input.vector;
     
     // 0. Handle Boost Speed
+    this.player.isBoosting = input.boost;
     this.player.speed = input.boost ? PhysicsConfig.BOOST_SPEED : PhysicsConfig.BASE_SPEED;
 
     // 1. Validate Input (Ignore weak/zero input)
@@ -65,6 +72,8 @@ export class SnakeLogic {
         this.dirX = Math.cos(newAngle);
         this.dirY = Math.sin(newAngle);
         
+        // console.log("NEW DIR:", this.dirX, this.dirY); // Debug Log
+        
         // Update Angle (for client interpolation/rendering if needed)
         this.player.angle = newAngle;
     }
@@ -73,8 +82,8 @@ export class SnakeLogic {
     const moveDist = this.player.speed * dt;
     this.player.x += this.dirX * moveDist;
     this.player.y += this.dirY * moveDist;
-
-    // 3. Update History (Breadcrumbs for segments)
+    
+    // 3. Update Segments (Follow the head)
     this.player.history.unshift({ x: this.player.x, y: this.player.y });
 
     // Prune history
@@ -100,7 +109,6 @@ export class SnakeLogic {
         const lastSeg = (this.player.segments.length > 0 ? this.player.segments[this.player.segments.length - 1] : { x: this.player.x, y: this.player.y }) as { x: number, y: number };
         
         const newSeg = new SnakeSegment();
-        // Place it at the same spot as the last one initially; it will unravel
         newSeg.x = lastSeg.x;
         newSeg.y = lastSeg.y;
         this.player.segments.push(newSeg);

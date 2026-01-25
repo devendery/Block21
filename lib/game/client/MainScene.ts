@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
+
 import { Client, Room } from 'colyseus.js';
-import { SnakeRenderer, ISnakeState } from './SnakeRenderer';
+import { SnakeRenderer } from './SnakeRenderer';
 import { InputManager } from './Input';
+import { GameState, Player, Food } from './ClientState';
 
 export class MainScene extends Phaser.Scene {
   private client!: Client;
-  private room!: Room;
+  private room!: Room<GameState>; // Typed Room
   
   private snakeRenderers: Map<string, SnakeRenderer> = new Map();
   private foodGraphics!: Phaser.GameObjects.Graphics;
@@ -20,6 +22,12 @@ export class MainScene extends Phaser.Scene {
   // Fake snake for input manager (it needs x/y to calculate delta)
   // We'll update this from the server state
   private localSnakeProxy: { x: number, y: number, width: number, height: number } = { x: 0, y: 0, width: 0, height: 0 };
+  
+  // Input throttling
+  private lastInputSentAt = 0;
+  private INPUT_SEND_INTERVAL = 50; // ms (20Hz)
+  
+  private roomHandlersBound = false;
 
   constructor() {
     super('MainScene');
@@ -38,11 +46,25 @@ export class MainScene extends Phaser.Scene {
     this.client = new Client("ws://localhost:2567");
     
     try {
-        this.room = await this.client.joinOrCreate("block21", { name: "Player" });
+        // Verify Schema is loaded
+        console.log("CLIENT GameState class:", GameState);
+
+        this.room = await this.client.joinOrCreate<GameState>("block21", { name: "Player" });
         console.log("Joined successfully!", this.room.sessionId);
         this.mySessionId = this.room.sessionId;
         
-        this.setupRoomHandlers();
+        // 🔒 WAIT for initial state
+        this.room.onStateChange.once((state) => {
+            console.log("CLIENT GameState fields:", Object.keys(state));
+            this.setupRoomHandlers();
+        });
+
+        // 🧹 Cleanup on Scene Shutdown
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            if (this.room && this.room.connection.isOpen) {
+                this.room.leave();
+            }
+        });
     } catch (e) {
         console.error("Join error", e);
         this.add.text(100, 100, "Connection Failed: " + e, { color: '#ff0000' });
@@ -63,35 +85,33 @@ export class MainScene extends Phaser.Scene {
     }
 
   setupRoomHandlers() {
-    // Players (Snakes)
-    this.room.state.players.onAdd((player: any, sessionId: string) => {
-        console.log("Player joined:", sessionId);
-        
-        // Create Renderer
-        const renderer = new SnakeRenderer(this, player);
-        this.snakeRenderers.set(sessionId, renderer);
-        
-        // If it's me, follow with camera
-        if (sessionId === this.mySessionId) {
-            this.localSnakeProxy.x = player.x;
-            this.localSnakeProxy.y = player.y;
-            this.cameras.main.startFollow(this.localSnakeProxy as any, true, 0.1, 0.1);
-            console.log("Camera following:", sessionId);
+    if (this.roomHandlersBound) return;
+    this.roomHandlersBound = true;
+
+    const players = this.room.state.players;
+    if (!players) return;
+
+    // � 1. HYDRATE EXISTING PLAYERS (ONCE)
+    players.forEach((player: Player, sessionId: string) => {
+        if (!this.snakeRenderers.has(sessionId)) {
+            this.handlePlayerAdd(player, sessionId);
         }
-        
-        // Listen for changes (Colyseus schema updates automatically, 
-        // but if we need specific events we can listen to .onChange)
     });
 
-    this.room.state.players.onRemove((player: any, sessionId: string) => {
-        console.log("Player left:", sessionId);
-        const renderer = this.snakeRenderers.get(sessionId);
-        if (renderer) {
-            renderer.destroy();
-            this.snakeRenderers.delete(sessionId);
+    // � 2. LISTEN FOR FUTURE JOINS
+    (players as any).onAdd = (player: Player, sessionId: string) => {
+        if (this.snakeRenderers.has(sessionId)) {
+            console.error("❌ DUPLICATE onAdd blocked:", sessionId);
+            return;
         }
-    });
-    
+        this.handlePlayerAdd(player, sessionId);
+    };
+
+    // 🔹 3. LISTEN FOR LEAVES
+    (players as any).onRemove = (player: Player, sessionId: string) => {
+        this.handlePlayerRemove(player, sessionId);
+    };
+
     // Food
     // We'll just re-draw all food when any food changes? 
     // Or we can maintain a map of food sprites?
@@ -101,23 +121,67 @@ export class MainScene extends Phaser.Scene {
     // Or just redraw every frame from the state? Redrawing 50 circles is cheap.
   }
 
+  handlePlayerAdd(player: Player, sessionId: string) {
+    // Safety Net: Prevent duplicate renderers
+    if (this.snakeRenderers.has(sessionId)) {
+        console.error("DUPLICATE SNAKE RENDER PREVENTED:", sessionId);
+        return;
+    }
+
+    console.log("Player joined:", sessionId);
+    
+    // Create Renderer
+    const renderer = new SnakeRenderer(this, player);
+    this.snakeRenderers.set(sessionId, renderer);
+    
+    // If it's me, follow with camera
+    if (sessionId === this.mySessionId) {
+        this.localSnakeProxy.x = player.x;
+        this.localSnakeProxy.y = player.y;
+        this.cameras.main.startFollow(this.localSnakeProxy as any, true, 0.1, 0.1);
+        console.log("Camera following:", sessionId);
+    }
+  }
+
+  handlePlayerRemove(player: Player, sessionId: string) {
+    console.log("Player left:", sessionId);
+    const renderer = this.snakeRenderers.get(sessionId);
+    if (renderer) {
+        renderer.destroy();
+        this.snakeRenderers.delete(sessionId);
+    }
+
+    if (sessionId === this.mySessionId) {
+        this.mySessionId = null;
+    }
+  }
+
   update(time: number, delta: number) {
-    if (!this.room) return;
+    if (!this.room || !this.room.state || !this.room.state.players) return;
+    
+    // 🛡️ Guard against closed socket
+    if (this.room.connection.isOpen !== true) {
+        return;
+    }
     
     const dt = delta / 1000;
 
-    // 1. Process Input
+    // 1. Render Snakes (Update Interpolation first)
+    this.snakeRenderers.forEach(renderer => {
+        renderer.update();
+    });
+
+    // 2. Update Local Proxy from Interpolated Renderer
     // We need the camera to follow the local player proxy
-    // Update proxy from room state
-    if (this.mySessionId && this.room.state.players.get(this.mySessionId)) {
-        const myPlayer = this.room.state.players.get(this.mySessionId);
-        this.localSnakeProxy.x = myPlayer.x;
-        this.localSnakeProxy.y = myPlayer.y;
-        
-        // Debug Info
-        // this.debugText.setText(`...`); 
+    if (this.mySessionId) {
+        const renderer = this.snakeRenderers.get(this.mySessionId);
+        if (renderer) {
+            this.localSnakeProxy.x = renderer.displayX;
+            this.localSnakeProxy.y = renderer.displayY;
+        }
     }
 
+    // 3. Process Input
     const inputVector = this.inputManager.update();
     
     // Debug: Force camera follow update every frame just in case
@@ -125,23 +189,18 @@ export class MainScene extends Phaser.Scene {
         // this.cameras.main.startFollow(this.localSnakeProxy as any, true, 0.1, 0.1);
     }
     
-    // Send Input to Server
-    // Limit send rate? Colyseus handles some batching, but we should be careful.
-    // Sending every frame is okay for 60fps local, but maybe throttle to 20fps (server tick)?
-    // For now, send every frame for smoothness testing.
-    this.room.send("input", { vector: inputVector, boost: false }); // TODO: Add boost input
-
-    // 2. Render Snakes
-    this.snakeRenderers.forEach(renderer => {
-        renderer.update();
-    });
+    // Send Input to Server (Throttled)
+    if (time - this.lastInputSentAt > this.INPUT_SEND_INTERVAL) {
+        this.room.send("input", inputVector); 
+        this.lastInputSentAt = time;
+    }
     
-    // 3. Render Food
+    // 4. Render Food
     this.foodGraphics.clear();
     this.foodGraphics.fillStyle(0xff0000, 1);
     this.foodGraphics.lineStyle(2, 0xffcccc, 1); // Glowy outline
     
-    this.room.state.food.forEach((food: any) => {
+    this.room.state.food.forEach((food: Food) => {
         this.foodGraphics.fillCircle(food.x, food.y, 6); // Physics radius is 10, visual can be smaller/different
         this.foodGraphics.strokeCircle(food.x, food.y, 6);
     });

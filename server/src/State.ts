@@ -14,6 +14,7 @@ export class Player extends Schema {
     @type("boolean") alive: boolean = true;
     @type("number") score: number = 0;
     @type("number") speed: number = 0;
+    @type("boolean") isBoosting: boolean = false;
     
     // Physics State (Not synced, but used for logic)
     dirX: number = 1;
@@ -31,6 +32,24 @@ export class Food extends Schema {
 
 export class GameState extends Schema {
     @type("number") mapSize: number = 3000;
-    @type({ map: Player }) players = new MapSchema<Player>();
-    @type({ map: Food }) food = new MapSchema<Food>();
+
+    @type({ map: Player }) 
+    players: MapSchema<Player> = new MapSchema<Player>();
+
+    @type({ map: Food }) 
+    food: MapSchema<Food> = new MapSchema<Food>();
 }
+
+
+// export class GameState extends Schema {
+//   @type("number") mapSize: number = 3000;
+//   @type({ map: Player }) players = new MapSchema<Player>();
+//   @type({ map: Food }) food = new MapSchema<Food>();
+// }
+
+// console.log("SERVER SCHEMA:", {
+//   GameState: GameState.name,
+//   Player: Player.name,
+//   SnakeSegment: SnakeSegment.name,
+//   Food: Food.name,
+// });
