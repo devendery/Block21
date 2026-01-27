@@ -14,6 +14,7 @@ export const PhysicsConfig = {
   MAP_SIZE: 3000, // World boundary
   FOOD_RADIUS: 10,
   FOOD_VALUE: 1,
+  AOI_RADIUS: 800,
 };
 
 export const VisualConfig = {

@@ -2,18 +2,67 @@ import http from "http";
 import express from "express";
 import cors from "cors";
 import { Server, Room, Client } from "colyseus";
+import { StateView } from "@colyseus/schema";
 // import { monitor } from "@colyseus/monitor";
 import { GameState, Player, SnakeSegment, Food } from "./State";
 import { SnakeLogic } from "./Snake";
 import { PhysicsConfig, checkCircleCollision } from "./Physics";
 
+class SpatialGrid {
+  private cellSize: number;
+  private cells: Map<string, Set<string>> = new Map();
+
+  constructor(cellSize: number) {
+    this.cellSize = cellSize;
+  }
+
+  clear() {
+    this.cells.clear();
+  }
+
+  private key(cx: number, cy: number) {
+    return `${cx},${cy}`;
+  }
+
+  insert(id: string, x: number, y: number) {
+    const cx = Math.floor(x / this.cellSize);
+    const cy = Math.floor(y / this.cellSize);
+    const k = this.key(cx, cy);
+    let bucket = this.cells.get(k);
+    if (!bucket) {
+      bucket = new Set<string>();
+      this.cells.set(k, bucket);
+    }
+    bucket.add(id);
+  }
+
+  query(x: number, y: number, radius: number): Set<string> {
+    const result = new Set<string>();
+    const minX = Math.floor((x - radius) / this.cellSize);
+    const maxX = Math.floor((x + radius) / this.cellSize);
+    const minY = Math.floor((y - radius) / this.cellSize);
+    const maxY = Math.floor((y + radius) / this.cellSize);
+    for (let cx = minX; cx <= maxX; cx++) {
+      for (let cy = minY; cy <= maxY; cy++) {
+        const bucket = this.cells.get(this.key(cx, cy));
+        if (!bucket) continue;
+        bucket.forEach((id) => result.add(id));
+      }
+    }
+    return result;
+  }
+}
+
 class Block21Room extends Room<GameState> {
   // Game Loop
   static TICK_RATE = 60; // 60Hz for smoother gameplay
   
-  // Store SnakeLogic instances (Physics engines) separately from State
-  // State is for syncing, Logic is for calculating
   snakes: Map<string, SnakeLogic> = new Map();
+  // Per-client AOI views
+  private clientViews: Map<string, StateView> = new Map();
+  private clientAOI: Map<string, { players: Set<string>; food: Set<string> }> = new Map();
+  private playersGrid = new SpatialGrid(PhysicsConfig.AOI_RADIUS);
+  private foodGrid = new SpatialGrid(PhysicsConfig.AOI_RADIUS);
 
     onCreate (options: any) {
     console.log("Block21 Room Created!");
@@ -67,12 +116,22 @@ class Block21Room extends Room<GameState> {
     snakeLogic.initSegments();
     
     this.snakes.set(client.sessionId, snakeLogic);
+
+    // Initialize AOI view for this client
+    const view = new StateView();
+    (client as any).view = view;
+    this.clientViews.set(client.sessionId, view);
+    this.clientAOI.set(client.sessionId, { players: new Set([client.sessionId]), food: new Set() });
+    // Always see yourself
+    view.add(player);
   }
 
   onLeave (client: Client, consented: boolean) {
     console.log(client.sessionId, "left!");
     this.state.players.delete(client.sessionId);
     this.snakes.delete(client.sessionId);
+    this.clientViews.delete(client.sessionId);
+    this.clientAOI.delete(client.sessionId);
   }
 
   onDispose() {
@@ -132,6 +191,83 @@ update(deltaTime: number) {
     this.checkFoodCollision(snake);
   });
 
+    this.playersGrid.clear();
+    this.state.players.forEach((p, id) => {
+      this.playersGrid.insert(id, p.x, p.y);
+    });
+
+    this.foodGrid.clear();
+    this.state.food.forEach((f, id) => {
+      this.foodGrid.insert(id, f.x, f.y);
+    });
+
+    // AOI filtering per client
+    const radiusSq = PhysicsConfig.AOI_RADIUS * PhysicsConfig.AOI_RADIUS;
+    this.clients.forEach((client) => {
+      const myId = client.sessionId;
+      const me = this.state.players.get(myId);
+      const view = this.clientViews.get(myId);
+      const aoi = this.clientAOI.get(myId);
+      if (!me || !view || !aoi) return;
+
+      const newPlayers = new Set<string>();
+      const playerCandidates = this.playersGrid.query(me.x, me.y, PhysicsConfig.AOI_RADIUS);
+      playerCandidates.forEach((pid) => {
+        const p = this.state.players.get(pid);
+        if (!p) return;
+        const dx = p.x - me.x;
+        const dy = p.y - me.y;
+        if ((dx * dx + dy * dy) <= radiusSq) {
+          newPlayers.add(pid);
+        }
+      });
+      newPlayers.add(myId);
+
+      aoi.players.forEach((pid) => {
+        if (newPlayers.has(pid)) return;
+        const p = this.state.players.get(pid);
+        if (p) {
+          view.remove(p);
+        }
+      });
+      newPlayers.forEach((pid) => {
+        if (aoi.players.has(pid)) return;
+        const p = this.state.players.get(pid);
+        if (p) {
+          view.add(p);
+        }
+      });
+      aoi.players = newPlayers;
+
+      const newFood = new Set<string>();
+      const foodCandidates = this.foodGrid.query(me.x, me.y, PhysicsConfig.AOI_RADIUS);
+      foodCandidates.forEach((fid) => {
+        const f = this.state.food.get(fid);
+        if (!f) return;
+        const dx = f.x - me.x;
+        const dy = f.y - me.y;
+        if ((dx * dx + dy * dy) <= radiusSq) {
+          newFood.add(fid);
+        }
+      });
+
+      aoi.food.forEach((fid) => {
+        if (newFood.has(fid)) return;
+        const f = this.state.food.get(fid);
+        if (f) {
+          view.remove(f);
+        }
+      });
+      newFood.forEach((fid) => {
+        if (aoi.food.has(fid)) return;
+        const f = this.state.food.get(fid);
+        if (f) {
+          view.add(f);
+        }
+      });
+      aoi.food = newFood;
+    });
+
   if (this.state.food.size < 50) {
     this.spawnFood();
   }
@@ -182,8 +318,12 @@ update(deltaTime: number) {
     }
   });
 
-  this.state.players.delete(sessionId);
-  this.snakes.delete(sessionId);
+  // mark dead then remove after short delay for clients to observe death
+  snake.player.alive = false;
+  this.clock.setTimeout(() => {
+    this.state.players.delete(sessionId);
+    this.snakes.delete(sessionId);
+  }, 100);
 }
 
 

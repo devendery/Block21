@@ -4,17 +4,23 @@ const g = globalThis as any;
 
 // Declare exports (types + values)
 let SnakeSegment: typeof Schema;
+let PathPoint: typeof Schema;
 let Player: typeof Schema;
 let Food: typeof Schema;
 let GameState: typeof Schema;
 
 if (g.__COLYSEUS_SCHEMA_CACHE__) {
   // 🔁 HMR reload: reuse existing constructors
-  ({ SnakeSegment, Player, Food, GameState } = g.__COLYSEUS_SCHEMA_CACHE__);
+  ({ SnakeSegment, PathPoint, Player, Food, GameState } = g.__COLYSEUS_SCHEMA_CACHE__);
 } else {
   // ✅ First load: define schema ONCE
 
   class SnakeSegmentDef extends Schema {
+    @type("number") x: number = 0;
+    @type("number") y: number = 0;
+  }
+
+  class PathPointDef extends Schema {
     @type("number") x: number = 0;
     @type("number") y: number = 0;
   }
@@ -28,6 +34,7 @@ if (g.__COLYSEUS_SCHEMA_CACHE__) {
     @type("boolean") alive: boolean = true;
     @type("number") score: number = 0;
     @type("number") speed: number = 0;
+    @type("number") length: number = 0;
     
     // Physics State (Not synced, but used for logic)
     dirX: number = 1;
@@ -35,6 +42,7 @@ if (g.__COLYSEUS_SCHEMA_CACHE__) {
     history: {x: number, y: number}[] = [];
 
     @type([SnakeSegmentDef]) segments = new ArraySchema<SnakeSegmentDef>();
+    @type([PathPointDef]) pathPoints = new ArraySchema<PathPointDef>();
   }
 
   class FoodDef extends Schema {
@@ -51,6 +59,7 @@ if (g.__COLYSEUS_SCHEMA_CACHE__) {
 
   // Assign exports
   SnakeSegment = SnakeSegmentDef;
+  PathPoint = PathPointDef;
   Player = PlayerDef;
   Food = FoodDef;
   GameState = GameStateDef;
@@ -58,6 +67,7 @@ if (g.__COLYSEUS_SCHEMA_CACHE__) {
   // Cache globally for HMR
   g.__COLYSEUS_SCHEMA_CACHE__ = {
     SnakeSegment,
+    PathPoint,
     Player,
     Food,
     GameState,
@@ -65,11 +75,12 @@ if (g.__COLYSEUS_SCHEMA_CACHE__) {
 }
 
 // ✅ Normal named exports (types + values work)
-export { SnakeSegment, Player, Food, GameState };
+export { SnakeSegment, PathPoint, Player, Food, GameState };
 
 console.log("CLIENT SCHEMA:", {
   GameState: GameState.name,
   Player: Player.name,
   SnakeSegment: SnakeSegment.name,
+  PathPoint: PathPoint.name,
   Food: Food.name,
 });

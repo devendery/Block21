@@ -32,6 +32,7 @@ export class SnakeLogic {
             this.player.segments.push(seg);
             this.player.history.push({ x: segX, y: segY });
         }
+        this.player.length = this.player.segments.length;
     }
   }
 
@@ -94,8 +95,8 @@ export class SnakeLogic {
     // 5. Update Body Segments (Constraint Solving)
     this.updateSegments();
 
-    // 6. Check Self Collision (DISABLED)
-    // this.checkSelfCollision();
+    // 6. Check Self Collision
+    this.checkSelfCollision();
     
     // 7. Check World Boundary
     this.checkWorldBoundary();
@@ -113,6 +114,7 @@ export class SnakeLogic {
         newSeg.y = lastSeg.y;
         this.player.segments.push(newSeg);
     }
+    this.player.length = this.player.segments.length;
   }
 
   private checkWorldBoundary() {

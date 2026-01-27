@@ -5,6 +5,11 @@ export class SnakeSegment extends Schema {
   @type("number") y: number = 0;
 }
 
+export class PathPoint extends Schema {
+  @type("number") x: number = 0;
+  @type("number") y: number = 0;
+}
+
 export class Player extends Schema {
   @type("string") id: string = "";
   @type("string") name: string = "";
@@ -15,8 +20,10 @@ export class Player extends Schema {
   @type("number") score: number = 0;
   @type("number") speed: number = 0;
   @type("boolean") isBoosting: boolean = false;
+  @type("number") length: number = 0;
 
   @type([SnakeSegment]) segments = new ArraySchema<SnakeSegment>();
+  @type([PathPoint]) pathPoints = new ArraySchema<PathPoint>();
 }
 
 export class Food extends Schema {
