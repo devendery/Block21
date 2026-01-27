@@ -17,6 +17,12 @@ const nextConfig = {
       "node_modules/@colyseus/schema"
     );
 
+    // Fix MetaMask SDK error with async-storage in Next.js
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      "@react-native-async-storage/async-storage": false,
+    };
+
     return config;
   },
 };

@@ -94,8 +94,8 @@ export class SnakeLogic {
     // 5. Update Body Segments (Constraint Solving)
     this.updateSegments();
 
-    // 6. Check Self Collision
-    this.checkSelfCollision();
+    // 6. Check Self Collision (DISABLED)
+    // this.checkSelfCollision();
     
     // 7. Check World Boundary
     this.checkWorldBoundary();
@@ -123,6 +123,7 @@ export class SnakeLogic {
     const maxDist = limit - r;
     
     if (distSq > maxDist * maxDist) {
+        console.log(`Boundary Collision: pos(${this.player.x}, ${this.player.y}) distSq(${distSq}) maxDistSq(${maxDist * maxDist})`);
         this.player.alive = false;
     }
   }

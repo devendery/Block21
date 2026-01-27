@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { PhysicsConfig, VisualConfig } from '../core/Physics';
 import { Player, SnakeSegment } from './ClientState';
 

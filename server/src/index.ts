@@ -136,34 +136,31 @@ class Block21Room extends Room<GameState> {
   killSnake(sessionId: string) {
     const snake = this.snakes.get(sessionId);
     if (!snake) return;
-    
-    // Convert segments to food
-    snake.player.segments.forEach((seg) => {
-        // Drop food at segment location
-        // Chance to drop? Or every segment? Let's drop every 3rd segment to avoid clutter
+
+    const playerName = snake.player.name;
+    console.log("Snake died, respawning:", sessionId);
+
+    // 1️⃣ Drop food from body
+    snake.player.segments.forEach(seg => {
         if (Math.random() > 0.5) {
             const food = new Food();
             food.x = seg.x + (Math.random() * 20 - 10);
             food.y = seg.y + (Math.random() * 20 - 10);
-            food.value = 1; // Dropped food value
-            const id = Math.random().toString(36).substr(2, 9);
-            this.state.food.set(id, food);
+            food.value = 1;
+            this.state.food.set(
+                Math.random().toString(36).slice(2),
+                food
+            );
         }
     });
 
-    const oldPlayer = snake.player;
-    const playerName = oldPlayer.name;
-
-    console.log("Killing snake:", sessionId);
-
-    // 1️⃣ FULLY REMOVE PLAYER (forces client onRemove)
+    // 2️⃣ Remove current state
     this.state.players.delete(sessionId);
     this.snakes.delete(sessionId);
 
-    // 2️⃣ RESPAWN AFTER SHORT DELAY
+    // 3️⃣ Respawn after delay
     this.clock.setTimeout(() => {
-        console.log("Respawning snake:", sessionId);
-
+        console.log("Respawning player:", sessionId);
         const player = new Player();
         player.id = sessionId;
         player.name = playerName;
@@ -172,15 +169,14 @@ class Block21Room extends Room<GameState> {
         player.angle = Math.random() * Math.PI * 2;
         player.alive = true;
 
-        // 3️⃣ ADD BACK TO STATE (forces client onAdd)
         this.state.players.set(sessionId, player);
 
         const logic = new SnakeLogic(player);
         logic.initSegments();
-
         this.snakes.set(sessionId, logic);
-    }, 200);
-  }
+    }, 1000);
+}
+
 }
 
 const app = express();

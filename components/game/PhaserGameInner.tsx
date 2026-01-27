@@ -9,17 +9,20 @@ export default function PhaserGameInner() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    let game: Phaser.Game;
+    let game: Phaser.Game | null = null;
+    let isMounted = true;
 
     const initGame = async () => {
-      if (!containerRef.current) return;
+      if (!containerRef.current || !isMounted) return;
 
       const Phaser = (await import('phaser')).default;
       const { MainScene } = await import('@/lib/game/client/MainScene');
       
+      if (!isMounted) return;
+
       const config: Phaser.Types.Core.GameConfig = {
         type: Phaser.AUTO,
-        parent: containerRef.current, // Use Ref directly
+        parent: containerRef.current,
         width: window.innerWidth,
         height: window.innerHeight,
         backgroundColor: '#000000',
@@ -43,8 +46,10 @@ export default function PhaserGameInner() {
     initGame();
 
     return () => {
+      isMounted = false;
       if (game) {
         game.destroy(true);
+        gameRef.current = null;
       }
     };
   }, []);

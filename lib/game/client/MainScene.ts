@@ -1,32 +1,30 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 
 import { Client, Room } from 'colyseus.js';
 import { SnakeRenderer } from './SnakeRenderer';
 import { InputManager } from './Input';
 import { GameState, Player, Food } from './ClientState';
+import { PhysicsConfig } from '../core/Physics';
 
 export class MainScene extends Phaser.Scene {
   private client!: Client;
-  private room!: Room<GameState>; // Typed Room
-  
+  private room!: Room<GameState>;
+
   private snakeRenderers: Map<string, SnakeRenderer> = new Map();
   private foodGraphics!: Phaser.GameObjects.Graphics;
-  
-  // Local Player ID
+
   private mySessionId: string | null = null;
-  
+
   private inputManager!: InputManager;
   private grid!: Phaser.GameObjects.Grid;
   private debugText!: Phaser.GameObjects.Text;
-  
-  // Fake snake for input manager (it needs x/y to calculate delta)
-  // We'll update this from the server state
-  private localSnakeProxy: { x: number, y: number, width: number, height: number } = { x: 0, y: 0, width: 0, height: 0 };
-  
-  // Input throttling
+
+  // Camera proxy (authoritative from STATE)
+  private localSnakeProxy = { x: 0, y: 0, width: 0, height: 0 };
+
   private lastInputSentAt = 0;
-  private INPUT_SEND_INTERVAL = 50; // ms (20Hz)
-  
+  private INPUT_SEND_INTERVAL = 50;
+
   private roomHandlersBound = false;
 
   constructor() {
@@ -34,175 +32,180 @@ export class MainScene extends Phaser.Scene {
   }
 
   async create() {
-    // 1. Setup Environment
     this.createEnvironment();
-    
-    // 2. Setup Input (We pass a proxy object that we'll update with server data)
-    // InputManager expects a Snake object, but mainly needs x/y. 
-    // We'll cast our proxy.
+
     this.inputManager = new InputManager(this, this.localSnakeProxy as any);
 
-    // 3. Connect to Server
     this.client = new Client("ws://localhost:2567");
-    
+
     try {
-        // Verify Schema is loaded
-        console.log("CLIENT GameState class:", GameState);
+      this.room = await this.client.joinOrCreate<GameState>("block21", { name: "Player" });
+      console.log("Joined successfully!", this.room.sessionId);
 
-        this.room = await this.client.joinOrCreate<GameState>("block21", { name: "Player" });
-        console.log("Joined successfully!", this.room.sessionId);
-        this.mySessionId = this.room.sessionId;
-        
-        // 🔒 WAIT for initial state
-        this.room.onStateChange.once((state) => {
-            console.log("CLIENT GameState fields:", Object.keys(state));
-            this.setupRoomHandlers();
-        });
+      this.mySessionId = this.room.sessionId;
 
-        // 🧹 Cleanup on Scene Shutdown
-        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-            if (this.room && this.room.connection.isOpen) {
-                this.room.leave();
-            }
-        });
+      // ✅ Robust Initialization: Listen for state changes until handlers are bound
+      const stateListener = (state: GameState) => {
+        if (state.players) {
+          this.setupRoomHandlers();
+          if (this.roomHandlersBound) {
+            // Once bound, we can stop listening to every state change for initialization
+            this.room.onStateChange.remove(stateListener);
+          }
+        }
+      };
+      this.room.onStateChange(stateListener);
+
+      // Initial check immediately
+      this.setupRoomHandlers();
+
+      // ✅ cleanup on reload / tab close
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        if (this.room && this.room.connection.isOpen) {
+          this.room.leave();
+        }
+      });
+
     } catch (e) {
-        console.error("Join error", e);
-        this.add.text(100, 100, "Connection Failed: " + e, { color: '#ff0000' });
+      console.error("Join error", e);
+      this.add.text(100, 100, "Connection Failed", { color: '#ff0000' });
     }
   }
-  
+
   createEnvironment() {
     this.cameras.main.setBackgroundColor('#111111');
-    this.grid = this.add.grid(0, 0, 20000, 20000, 50, 50, 0x1a1a1a, 1, 0x333333, 0.2);
+
+    this.grid = this.add.grid(
+      0, 0, 20000, 20000, 50, 50,
+      0x1a1a1a, 1, 0x333333, 0.2
+    );
     this.grid.setDepth(-1);
-    
+
+    // World Border
+    const border = this.add.graphics();
+    border.setDepth(0);
+    border.lineStyle(10, 0xff0033, 0.8);
+    border.strokeCircle(0, 0, PhysicsConfig.MAP_SIZE / 2);
+
     this.foodGraphics = this.add.graphics();
     this.foodGraphics.setDepth(1);
-    
-    this.debugText = this.add.text(10, 10, 'Phase 3: Multiplayer', { color: '#ffffff', fontSize: '20px' }).setScrollFactor(0);
-        this.debugText.setDepth(100);
-        this.debugText.setVisible(false); // Hide debug text
-    }
 
+    this.debugText = this.add.text(
+      10, 10, 'Phase 3: Multiplayer',
+      { color: '#ffffff', fontSize: '20px' }
+    ).setScrollFactor(0).setDepth(100).setVisible(false);
+  }
+
+  // ===============================
+  // PLAYER LIFECYCLE
+  // ===============================
   setupRoomHandlers() {
     if (this.roomHandlersBound) return;
-    this.roomHandlersBound = true;
+    if (!this.room || !this.room.state) return;
 
     const players = this.room.state.players;
-    if (!players) return;
+    if (!players) {
+      console.warn("State exists but 'players' is missing. Waiting for sync...");
+      return;
+    }
 
-    // � 1. HYDRATE EXISTING PLAYERS (ONCE)
+    // ✅ LOCK ONLY AFTER VALIDATION
+    this.roomHandlersBound = true;
+
+    console.log("Setting up room handlers. Players in state:", players.size);
+
+    // 1️⃣ HYDRATE EXISTING
     players.forEach((player: Player, sessionId: string) => {
-        if (!this.snakeRenderers.has(sessionId)) {
-            this.handlePlayerAdd(player, sessionId);
-        }
+      console.log("Hydrating existing player:", sessionId);
+      this.handlePlayerAdd(player, sessionId);
     });
 
-    // � 2. LISTEN FOR FUTURE JOINS
+    // 2️⃣ LISTEN FOR NEW
     (players as any).onAdd = (player: Player, sessionId: string) => {
-        if (this.snakeRenderers.has(sessionId)) {
-            console.error("❌ DUPLICATE onAdd blocked:", sessionId);
-            return;
-        }
-        this.handlePlayerAdd(player, sessionId);
+      console.log("onAdd player:", sessionId);
+      this.handlePlayerAdd(player, sessionId);
     };
 
-    // 🔹 3. LISTEN FOR LEAVES
     (players as any).onRemove = (player: Player, sessionId: string) => {
-        this.handlePlayerRemove(player, sessionId);
+      console.log("onRemove player:", sessionId);
+      this.handlePlayerRemove(player, sessionId);
     };
-
-    // Food
-    // We'll just re-draw all food when any food changes? 
-    // Or we can maintain a map of food sprites?
-    // Drawing 50 circles in one Graphics object is efficient.
-    // But we need to know where they are.
-    // Let's just listen to add/remove and trigger a redraw flag?
-    // Or just redraw every frame from the state? Redrawing 50 circles is cheap.
   }
+
 
   handlePlayerAdd(player: Player, sessionId: string) {
-    // Safety Net: Prevent duplicate renderers
-    if (this.snakeRenderers.has(sessionId)) {
-        console.error("DUPLICATE SNAKE RENDER PREVENTED:", sessionId);
-        return;
-    }
+    if (this.snakeRenderers.has(sessionId)) return;
 
     console.log("Player joined:", sessionId);
-    
-    // Create Renderer
+
     const renderer = new SnakeRenderer(this, player);
     this.snakeRenderers.set(sessionId, renderer);
-    
-    // If it's me, follow with camera
-    if (sessionId === this.mySessionId) {
-        this.localSnakeProxy.x = player.x;
-        this.localSnakeProxy.y = player.y;
-        this.cameras.main.startFollow(this.localSnakeProxy as any, true, 0.1, 0.1);
-        console.log("Camera following:", sessionId);
-    }
-  }
-
-  handlePlayerRemove(player: Player, sessionId: string) {
-    console.log("Player left:", sessionId);
-    const renderer = this.snakeRenderers.get(sessionId);
-    if (renderer) {
-        renderer.destroy();
-        this.snakeRenderers.delete(sessionId);
-    }
 
     if (sessionId === this.mySessionId) {
-        this.mySessionId = null;
+      this.cameras.main.startFollow(
+        this.localSnakeProxy as any,
+        true, 0.1, 0.1
+      );
     }
   }
+handlePlayerRemove(_player: Player, sessionId: string) {
+  console.log("Player left:", sessionId);
 
+  const renderer = this.snakeRenderers.get(sessionId);
+  if (renderer) {
+    renderer.destroy();
+    this.snakeRenderers.delete(sessionId);
+  }
+
+  // If this was MY snake, stop camera follow
+  if (sessionId === this.mySessionId) {
+    this.mySessionId = null;
+    this.cameras.main.stopFollow();
+  }
+}
+
+
+
+  // ===============================
+  // GAME LOOP
+  // ===============================
   update(time: number, delta: number) {
-    if (!this.room || !this.room.state || !this.room.state.players) return;
-    
-    // 🛡️ Guard against closed socket
-    if (this.room.connection.isOpen !== true) {
-        return;
-    }
-    
-    const dt = delta / 1000;
+  // 🛑 HARD GUARDS — VERY IMPORTANT
+  if (!this.room) return;
+  if (!this.room.connection || this.room.connection.isOpen !== true) return;
+  if (!this.room.state) return;
+  if (!this.room.state.players) return;
 
-    // 1. Render Snakes (Update Interpolation first)
-    this.snakeRenderers.forEach(renderer => {
-        renderer.update();
-    });
+  // 1. Update all snake renderers
+  this.snakeRenderers.forEach(renderer => {
+    renderer.update();
+  });
 
-    // 2. Update Local Proxy from Interpolated Renderer
-    // We need the camera to follow the local player proxy
-    if (this.mySessionId) {
-        const renderer = this.snakeRenderers.get(this.mySessionId);
-        if (renderer) {
-            this.localSnakeProxy.x = renderer.displayX;
-            this.localSnakeProxy.y = renderer.displayY;
-        }
-    }
-
-    // 3. Process Input
-    const inputVector = this.inputManager.update();
-    
-    // Debug: Force camera follow update every frame just in case
-    if (this.mySessionId) {
-        // this.cameras.main.startFollow(this.localSnakeProxy as any, true, 0.1, 0.1);
-    }
-    
-    // Send Input to Server (Throttled)
-    if (time - this.lastInputSentAt > this.INPUT_SEND_INTERVAL) {
-        this.room.send("input", inputVector); 
-        this.lastInputSentAt = time;
-    }
-    
-    // 4. Render Food
-    this.foodGraphics.clear();
-    this.foodGraphics.fillStyle(0xff0000, 1);
-    this.foodGraphics.lineStyle(2, 0xffcccc, 1); // Glowy outline
-    
-    this.room.state.food.forEach((food: Food) => {
-        this.foodGraphics.fillCircle(food.x, food.y, 6); // Physics radius is 10, visual can be smaller/different
-        this.foodGraphics.strokeCircle(food.x, food.y, 6);
-    });
+  // 2. Update local camera proxy ONLY if my snake exists
+  if (this.mySessionId && this.snakeRenderers.has(this.mySessionId)) {
+    const renderer = this.snakeRenderers.get(this.mySessionId)!;
+    this.localSnakeProxy.x = renderer.displayX;
+    this.localSnakeProxy.y = renderer.displayY;
   }
+
+  // 3. Process input
+  const inputVector = this.inputManager.update();
+
+  // 4. Send input to server (throttled)
+  if (time - this.lastInputSentAt > this.INPUT_SEND_INTERVAL) {
+    this.room.send("input", inputVector);
+    this.lastInputSentAt = time;
+  }
+
+  // 5. Render food
+  this.foodGraphics.clear();
+  this.foodGraphics.fillStyle(0xff0000, 1);
+  this.foodGraphics.lineStyle(2, 0xffcccc, 1);
+
+  this.room.state.food.forEach((food) => {
+    this.foodGraphics.fillCircle(food.x, food.y, 6);
+    this.foodGraphics.strokeCircle(food.x, food.y, 6);
+  });
+}
+
 }
