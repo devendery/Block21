@@ -11,13 +11,19 @@ export class MainScene extends Phaser.Scene {
   private room!: Room<GameState>;
 
   private snakeRenderers: Map<string, SnakeRenderer> = new Map();
-  private foodGraphics!: Phaser.GameObjects.Graphics;
 
   private mySessionId: string | null = null;
 
   private inputManager!: InputManager;
   private grid!: Phaser.GameObjects.Grid;
   private debugText!: Phaser.GameObjects.Text;
+  
+  // UI Elements
+  private leaderboardContainer!: Phaser.GameObjects.Container;
+  private leaderboardTexts: Phaser.GameObjects.Text[] = [];
+  private minimapGraphics!: Phaser.GameObjects.Graphics;
+  private minimapBorder!: Phaser.GameObjects.Graphics;
+  private foodTexts: Map<string, Phaser.GameObjects.Text> = new Map();
 
   // Camera proxy (authoritative from STATE)
   private localSnakeProxy = { x: 0, y: 0, width: 0, height: 0 };
@@ -33,6 +39,7 @@ export class MainScene extends Phaser.Scene {
 
   async create() {
     this.createEnvironment();
+    this.createUI();
 
     this.inputManager = new InputManager(this, this.localSnakeProxy as any);
 
@@ -64,6 +71,9 @@ export class MainScene extends Phaser.Scene {
         if (this.room && this.room.connection.isOpen) {
           this.room.leave();
         }
+        // Cleanup UI
+        this.foodTexts.forEach(txt => txt.destroy());
+        this.foodTexts.clear();
       });
 
     } catch (e) {
@@ -73,27 +83,65 @@ export class MainScene extends Phaser.Scene {
   }
 
   createEnvironment() {
-    this.cameras.main.setBackgroundColor('#111111');
+    // Worms Zone style blue background
+    this.cameras.main.setBackgroundColor('#1a5276');
 
+    // Subtle texture grid
     this.grid = this.add.grid(
-      0, 0, 20000, 20000, 50, 50,
-      0x1a1a1a, 1, 0x333333, 0.2
+      0, 0, 20000, 20000, 100, 100,
+      0x154360, 0.5, 0x1b4f72, 0.3
     );
     this.grid.setDepth(-1);
 
     // World Border
     const border = this.add.graphics();
     border.setDepth(0);
-    border.lineStyle(10, 0xff0033, 0.8);
+    border.lineStyle(15, 0xffffff, 0.2); // Soft white border
     border.strokeCircle(0, 0, PhysicsConfig.MAP_SIZE / 2);
-
-    this.foodGraphics = this.add.graphics();
-    this.foodGraphics.setDepth(1);
 
     this.debugText = this.add.text(
       10, 10, 'Phase 3: Multiplayer',
       { color: '#ffffff', fontSize: '20px' }
     ).setScrollFactor(0).setDepth(100).setVisible(false);
+  }
+
+  createUI() {
+    // 1. Leaderboard (Top Left)
+    this.leaderboardContainer = this.add.container(20, 20).setScrollFactor(0).setDepth(1000);
+    const lbBg = this.add.graphics();
+    lbBg.fillStyle(0x000000, 0.5);
+    lbBg.fillRoundedRect(-10, -10, 220, 280, 10);
+    this.leaderboardContainer.add(lbBg);
+
+    const title = this.add.text(0, 0, "TOP PLAYERS", {
+       fontSize: "18px",
+       fontStyle: "bold",
+       color: "#ffcc00"
+     });
+    this.leaderboardContainer.add(title);
+
+    for (let i = 0; i < 10; i++) {
+      const txt = this.add.text(0, 30 + i * 22, "", {
+        fontSize: "14px",
+        color: "#ffffff"
+      });
+      this.leaderboardTexts.push(txt);
+      this.leaderboardContainer.add(txt);
+    }
+
+    // 2. Minimap (Top Right)
+    const mapSize = 180;
+    const margin = 20;
+    const x = this.cameras.main.width - mapSize - margin;
+    const y = margin;
+
+    this.minimapBorder = this.add.graphics().setScrollFactor(0).setDepth(1000);
+    this.minimapBorder.lineStyle(2, 0xffffff, 0.5);
+    this.minimapBorder.strokeRect(x, y, mapSize, mapSize);
+    this.minimapBorder.fillStyle(0x000000, 0.3);
+    this.minimapBorder.fillRect(x, y, mapSize, mapSize);
+
+    this.minimapGraphics = this.add.graphics().setScrollFactor(0).setDepth(1001);
   }
 
   // ===============================
@@ -197,14 +245,105 @@ handlePlayerRemove(_player: Player, sessionId: string) {
     this.lastInputSentAt = time;
   }
 
-  // 5. Render food
-  this.foodGraphics.clear();
-  this.foodGraphics.fillStyle(0xff0000, 1);
-  this.foodGraphics.lineStyle(2, 0xffcccc, 1);
+  // 5. Render food (Emoji Style)
+  this.updateFood();
 
-  this.room.state.food.forEach((food) => {
-    this.foodGraphics.fillCircle(food.x, food.y, 6);
-    this.foodGraphics.strokeCircle(food.x, food.y, 6);
+  // 6. Update UI
+  this.updateLeaderboard();
+  this.updateMinimap();
+}
+
+private readonly FOOD_EMOJIS = ["🍎", "🍐", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍈", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🍆", "🥑", "🥦", "🥬", "🥒", "🌽", "🥕", "🫑", "🥔", "🍠"];
+
+private updateFood() {
+  const currentFoodIds = new Set<string>();
+  
+  this.room.state.food.forEach((food, id) => {
+    currentFoodIds.add(id);
+    if (!this.foodTexts.has(id)) {
+      // Pick emoji based on id hash
+      let hash = 0;
+      for (let i = 0; i < id.length; i++) hash = (hash << 5) - hash + id.charCodeAt(i);
+      const emoji = this.FOOD_EMOJIS[Math.abs(hash) % this.FOOD_EMOJIS.length];
+      
+      const txt = this.add.text(food.x, food.y, emoji, { fontSize: "24px" })
+        .setOrigin(0.5)
+        .setDepth(1);
+      this.foodTexts.set(id, txt);
+    } else {
+      const txt = this.foodTexts.get(id)!;
+      txt.setPosition(food.x, food.y);
+    }
+  });
+
+  // Cleanup eaten food
+  this.foodTexts.forEach((txt, id) => {
+    if (!currentFoodIds.has(id)) {
+      txt.destroy();
+      this.foodTexts.delete(id);
+    }
+  });
+}
+
+private updateLeaderboard() {
+  const players = Array.from(this.room.state.players.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10);
+
+  this.leaderboardTexts.forEach((txt, i) => {
+    const p = players[i];
+    if (p) {
+      const name = p.name || "Anonymous";
+      const isMe = p.id === this.mySessionId ? "> " : "  ";
+      txt.setText(`${isMe}${i + 1}. ${name.padEnd(12)} ${Math.floor(p.score)}`);
+      txt.setColor(p.id === this.mySessionId ? "#00ff00" : "#ffffff");
+      txt.setVisible(true);
+    } else {
+      txt.setVisible(false);
+    }
+  });
+}
+
+private updateMinimap() {
+  const mapSize = 180;
+  const margin = 20;
+  const x = this.cameras.main.width - mapSize - margin;
+  const y = margin;
+
+  // Update border position (in case of resize)
+  this.minimapBorder.clear();
+  this.minimapBorder.lineStyle(2, 0xffffff, 0.5);
+  this.minimapBorder.strokeRect(x, y, mapSize, mapSize);
+  this.minimapBorder.fillStyle(0x000000, 0.3);
+  this.minimapBorder.fillRect(x, y, mapSize, mapSize);
+
+  this.minimapGraphics.clear();
+  
+  const worldSize = PhysicsConfig.MAP_SIZE;
+  const scale = mapSize / worldSize;
+
+  // Draw border circle on minimap
+  this.minimapGraphics.lineStyle(1, 0xffffff, 0.2);
+  this.minimapGraphics.strokeCircle(x + mapSize/2, y + mapSize/2, (worldSize/2) * scale);
+
+  this.room.state.players.forEach((player) => {
+    if (!player.alive) return;
+
+    // Relative to center (0,0)
+    const relX = player.x * scale;
+    const relY = player.y * scale;
+
+    // Screen position
+    const px = x + mapSize / 2 + relX;
+    const py = y + mapSize / 2 + relY;
+
+    if (player.id === this.mySessionId) {
+      this.minimapGraphics.fillStyle(0x00ff00, 1);
+      this.minimapGraphics.fillCircle(px, py, 3);
+    } else {
+      this.minimapGraphics.fillStyle(0xffffff, 0.6);
+      this.minimapGraphics.fillCircle(px, py, 2);
+    }
   });
 }
 
