@@ -32,6 +32,9 @@ export class MainScene extends Phaser.Scene {
   private INPUT_SEND_INTERVAL = 50;
 
   private roomHandlersBound = false;
+private MIN_ZOOM = 0.45;
+private MAX_ZOOM = 1.1;
+private ZOOM_LERP = 0.04;
 
   constructor() {
     super('MainScene');
@@ -179,10 +182,36 @@ export class MainScene extends Phaser.Scene {
       this.handlePlayerRemove(player, sessionId);
     };
   }
+private updateCameraZoom() {
+  if (!this.mySessionId) return;
+
+  const player = this.room.state.players.get(this.mySessionId);
+  if (!player) return;
+
+  // Use segments OR score
+  const size = player.segments?.length ?? 10;
+
+  // Bigger snake → smaller zoom
+  let targetZoom = Phaser.Math.Clamp(
+    1.2 - size * 0.01,
+    this.MIN_ZOOM,
+    this.MAX_ZOOM
+  );
+
+  const cam = this.cameras.main;
+  cam.setZoom(
+    Phaser.Math.Linear(cam.zoom, targetZoom, this.ZOOM_LERP)
+  );
+}
 
 
   handlePlayerAdd(player: Player, sessionId: string) {
-    if (this.snakeRenderers.has(sessionId)) return;
+   // 🚫 Block duplicate OR post-death recreation
+if (this.snakeRenderers.has(sessionId)) {
+  console.warn("Duplicate snake blocked:", sessionId);
+  return;
+}
+
 
     console.log("Player joined:", sessionId);
 
@@ -204,12 +233,30 @@ handlePlayerRemove(_player: Player, sessionId: string) {
     renderer.destroy();
     this.snakeRenderers.delete(sessionId);
   }
-
-  // If this was MY snake, stop camera follow
   if (sessionId === this.mySessionId) {
-    this.mySessionId = null;
-    this.cameras.main.stopFollow();
-  }
+  console.warn("💀 YOU DIED — GAME OVER");
+
+  this.mySessionId = null;
+
+  // Stop camera
+  this.cameras.main.stopFollow();
+
+  // Disable input completely
+ (this.inputManager as any).enabled = false;
+
+  // Show GAME OVER text
+  this.add.text(
+    this.cameras.main.worldView.centerX,
+    this.cameras.main.worldView.centerY,
+    "GAME OVER\nRefresh to play again",
+    {
+      fontSize: "48px",
+      color: "#ff0033",
+      align: "center"
+    }
+  ).setOrigin(0.5).setDepth(2000);
+}
+
 }
 
 
@@ -218,11 +265,17 @@ handlePlayerRemove(_player: Player, sessionId: string) {
   // GAME LOOP
   // ===============================
   update(time: number, delta: number) {
+  
+
   // 🛑 HARD GUARDS — VERY IMPORTANT
   if (!this.room) return;
   if (!this.room.connection || this.room.connection.isOpen !== true) return;
   if (!this.room.state) return;
   if (!this.room.state.players) return;
+    // 🚫 If I am dead, do NOTHING
+    if (!this.mySessionId) {
+    return;
+    }
 
   // 1. Update all snake renderers
   this.snakeRenderers.forEach(renderer => {
@@ -251,6 +304,8 @@ handlePlayerRemove(_player: Player, sessionId: string) {
   // 6. Update UI
   this.updateLeaderboard();
   this.updateMinimap();
+  this.updateCameraZoom();
+
 }
 
 private readonly FOOD_EMOJIS = ["🍎", "🍐", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍈", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🍆", "🥑", "🥦", "🥬", "🥒", "🌽", "🥕", "🫑", "🥔", "🍠"];

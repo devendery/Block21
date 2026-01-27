@@ -132,50 +132,32 @@ class Block21Room extends Room<GameState> {
         }
     });
   }
+killSnake(sessionId: string) {
+  const snake = this.snakes.get(sessionId);
+  if (!snake) return;
 
-  killSnake(sessionId: string) {
-    const snake = this.snakes.get(sessionId);
-    if (!snake) return;
+  console.log("💀 Snake died permanently:", sessionId);
 
-    const playerName = snake.player.name;
-    console.log("Snake died, respawning:", sessionId);
+  // 1️⃣ Drop food from body
+  snake.player.segments.forEach(seg => {
+    if (Math.random() > 0.5) {
+      const food = new Food();
+      food.x = seg.x + (Math.random() * 20 - 10);
+      food.y = seg.y + (Math.random() * 20 - 10);
+      food.value = 1;
 
-    // 1️⃣ Drop food from body
-    snake.player.segments.forEach(seg => {
-        if (Math.random() > 0.5) {
-            const food = new Food();
-            food.x = seg.x + (Math.random() * 20 - 10);
-            food.y = seg.y + (Math.random() * 20 - 10);
-            food.value = 1;
-            this.state.food.set(
-                Math.random().toString(36).slice(2),
-                food
-            );
-        }
-    });
+      this.state.food.set(
+        Math.random().toString(36).slice(2),
+        food
+      );
+    }
+  });
 
-    // 2️⃣ Remove current state
-    this.state.players.delete(sessionId);
-    this.snakes.delete(sessionId);
-
-    // 3️⃣ Respawn after delay
-    this.clock.setTimeout(() => {
-        console.log("Respawning player:", sessionId);
-        const player = new Player();
-        player.id = sessionId;
-        player.name = playerName;
-        player.x = Math.random() * 1000 - 500;
-        player.y = Math.random() * 1000 - 500;
-        player.angle = Math.random() * Math.PI * 2;
-        player.alive = true;
-
-        this.state.players.set(sessionId, player);
-
-        const logic = new SnakeLogic(player);
-        logic.initSegments();
-        this.snakes.set(sessionId, logic);
-    }, 1000);
+  // 2️⃣ FINAL DELETE — NO RESPAWN EVER
+  this.state.players.delete(sessionId);
+  this.snakes.delete(sessionId);
 }
+
 
 }
 
