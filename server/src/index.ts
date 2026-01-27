@@ -78,35 +78,65 @@ class Block21Room extends Room<GameState> {
   onDispose() {
     console.log("room disposed");
   }
+ checkSnakeCollision(mySnake: SnakeLogic, mySessionId: string) {
+  if (!mySnake.player.alive) return;
 
-  update(deltaTime: number) {
-    // Convert ms to seconds
-    const dt = deltaTime / 1000;
+  const headX = mySnake.player.x;
+  const headY = mySnake.player.y;
 
-    // Update all snakes
-    this.snakes.forEach((snake, sessionId) => {
-        // ✅ USE LAST INPUT FROM CLIENT
-        const input = snake.lastInput ?? { 
-            vector: { x: snake.player.dirX, y: snake.player.dirY }, 
-            boost: false 
-        };
+  this.snakes.forEach((otherSnake, otherSessionId) => {
+    if (otherSessionId === mySessionId) return;
+    if (!otherSnake.player.alive) return;
 
-        snake.update(dt, input); 
-        
-        // Check Food Collision
-        this.checkFoodCollision(snake);
-        
-        // Check Death
-        if (!snake.player.alive) {
-            this.killSnake(sessionId);
-        }
-    });
-    
-    // Maintain Food Count
-    if (this.state.food.size < 50) {
-        this.spawnFood();
+    for (const seg of otherSnake.player.segments) {
+      if (
+        checkCircleCollision(
+          headX,
+          headY,
+          PhysicsConfig.COLLISION_RADIUS,
+          seg.x,
+          seg.y,
+          PhysicsConfig.COLLISION_RADIUS
+        )
+      ) {
+        console.log(`💥 ${mySessionId} killed by ${otherSessionId}`);
+        mySnake.player.alive = false;
+        this.killSnake(mySessionId);
+        return;
+      }
     }
+  });
+}
+
+
+update(deltaTime: number) {
+  const dt = deltaTime / 1000;
+
+  this.snakes.forEach((snake, sessionId) => {
+    if (!snake.player.alive) return;
+
+    const input = snake.lastInput ?? {
+      vector: { x: snake.player.dirX, y: snake.player.dirY },
+      boost: false
+    };
+
+    snake.update(dt, input);
+
+    // ⚠️ PVP FIRST
+    this.checkSnakeCollision(snake, sessionId);
+
+    // ❌ STOP if died
+    if (!snake.player.alive) return;
+
+    // 🍎 FOOD ONLY IF ALIVE
+    this.checkFoodCollision(snake);
+  });
+
+  if (this.state.food.size < 50) {
+    this.spawnFood();
   }
+}
+
 
   spawnFood() {
     const food = new Food();
@@ -132,13 +162,12 @@ class Block21Room extends Room<GameState> {
         }
     });
   }
-killSnake(sessionId: string) {
+ killSnake(sessionId: string) {
   const snake = this.snakes.get(sessionId);
   if (!snake) return;
 
-  console.log("💀 Snake died permanently:", sessionId);
+  console.log("💀 Snake died:", sessionId);
 
-  // 1️⃣ Drop food from body
   snake.player.segments.forEach(seg => {
     if (Math.random() > 0.5) {
       const food = new Food();
@@ -153,10 +182,10 @@ killSnake(sessionId: string) {
     }
   });
 
-  // 2️⃣ FINAL DELETE — NO RESPAWN EVER
   this.state.players.delete(sessionId);
   this.snakes.delete(sessionId);
 }
+
 
 
 }

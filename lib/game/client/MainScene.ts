@@ -39,11 +39,18 @@ private ZOOM_LERP = 0.04;
   constructor() {
     super('MainScene');
   }
+preload() {
+  this.textures.generate('particle', {
+    data: ['1'],
+    pixelWidth: 2,
+    pixelHeight: 2
+  });
+}
+
 
   async create() {
     this.createEnvironment();
     this.createUI();
-
     this.inputManager = new InputManager(this, this.localSnakeProxy as any);
 
     this.client = new Client("ws://localhost:2567");
@@ -182,6 +189,7 @@ private ZOOM_LERP = 0.04;
       this.handlePlayerRemove(player, sessionId);
     };
   }
+  
 private updateCameraZoom() {
   if (!this.mySessionId) return;
 
@@ -224,40 +232,59 @@ if (this.snakeRenderers.has(sessionId)) {
         true, 0.1, 0.1
       );
     }
-  }
+  } 
+
+
 handlePlayerRemove(_player: Player, sessionId: string) {
   console.log("Player left:", sessionId);
 
   const renderer = this.snakeRenderers.get(sessionId);
+
   if (renderer) {
+    const x = renderer.displayX;
+    const y = renderer.displayY;
+
+    // 💥 Explosion FIRST
+    this.playDeathExplosion(x, y);
+
+    // 🧹 Then destroy renderer
     renderer.destroy();
     this.snakeRenderers.delete(sessionId);
   }
+
+  // ☠️ IF THIS WAS MY SNAKE
   if (sessionId === this.mySessionId) {
-  console.warn("💀 YOU DIED — GAME OVER");
+    console.warn("💀 YOU DIED — Respawning...");
+    // Optional: Add a brief visual indicator that you died
+  }
+}
 
-  this.mySessionId = null;
 
-  // Stop camera
-  this.cameras.main.stopFollow();
-
-  // Disable input completely
- (this.inputManager as any).enabled = false;
-
-  // Show GAME OVER text
-  this.add.text(
-    this.cameras.main.worldView.centerX,
-    this.cameras.main.worldView.centerY,
-    "GAME OVER\nRefresh to play again",
+private playDeathExplosion(x: number, y: number) {
+  const emitter = this.add.particles(
+    x,
+    y,
+    'particle', // ✅ SAME KEY AS preload
     {
-      fontSize: "48px",
-      color: "#ff0033",
-      align: "center"
+      speed: { min: 80, max: 320 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 1.2, end: 0 },
+      lifespan: 700,
+      quantity: 50,
+      tint: [0xff0033, 0xff6600, 0xffcc00],
+      blendMode: Phaser.BlendModes.ADD
     }
-  ).setOrigin(0.5).setDepth(2000);
+  );
+
+  this.time.delayedCall(750, () => {
+    emitter.destroy();
+  });
 }
 
-}
+
+
+
+
 
 
 
@@ -272,10 +299,6 @@ handlePlayerRemove(_player: Player, sessionId: string) {
   if (!this.room.connection || this.room.connection.isOpen !== true) return;
   if (!this.room.state) return;
   if (!this.room.state.players) return;
-    // 🚫 If I am dead, do NOTHING
-    if (!this.mySessionId) {
-    return;
-    }
 
   // 1. Update all snake renderers
   this.snakeRenderers.forEach(renderer => {
@@ -339,6 +362,7 @@ private updateFood() {
     }
   });
 }
+
 
 private updateLeaderboard() {
   const players = Array.from(this.room.state.players.values())

@@ -49,6 +49,12 @@ export class SnakeRenderer {
 
   update() {
     try {
+        // 🔥 DEAD GUARD: Clear graphics if snake is not alive
+        if (!this.snake.alive) {
+            this.clear();
+            return;
+        }
+
         // Interpolation Factor (0.0 - 1.0)
         // Lower = Smoother but more lag (0.1)
         // Higher = Snappier but more jitter (0.5)
