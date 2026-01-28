@@ -152,7 +152,7 @@ export class SnakeRenderer {
     this.headGraphics.fillStyle(shellColor, 1);
     
     // Draw Hexagon Head
-    const r = VisualConfig.RENDER_RADIUS;
+    const r = this.snake.radius; // Use dynamic radius from server
     const angle = this.displayAngle; // USE INTERPOLATED ANGLE
     
     // Points for a "Coffin" or "Hex" shape pointing forward
@@ -288,7 +288,7 @@ export class SnakeRenderer {
       // Final visual scale
       const scale = 1 - smoothT * (1 - VisualConfig.TAIL_MIN_SCALE);
       
-      const radius = VisualConfig.RENDER_RADIUS * scale;
+      const radius = this.snake.radius * scale; // Use dynamic radius from server
 
       // 1. Matte Shell
       this.bodyGraphics.fillStyle(shellColor, 1);
@@ -311,7 +311,7 @@ export class SnakeRenderer {
     const shadowOffset = 10; 
     
     // Head Shadow
-    this.shadowGraphics.fillCircle(this.displayX + shadowOffset, this.displayY + shadowOffset, VisualConfig.RENDER_RADIUS);
+    this.shadowGraphics.fillCircle(this.displayX + shadowOffset, this.displayY + shadowOffset, this.snake.radius);
 
     // Body Shadows (Tapered)
     const totalSegments = this.displaySegments.length;
@@ -325,7 +325,7 @@ export class SnakeRenderer {
         const smoothT = 1 - (1 - t) * (1 - t);
         const scale = 1 - smoothT * (1 - VisualConfig.TAIL_MIN_SCALE);
         
-        const radius = VisualConfig.RENDER_RADIUS * scale;
+        const radius = this.snake.radius * scale;
         
         const shadowAlpha = VisualConfig.SHADOW_ALPHA * scale; 
         this.shadowGraphics.fillStyle(0x000000, shadowAlpha);

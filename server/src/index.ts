@@ -60,7 +60,7 @@ class Block21Room extends Room<GameState> {
   snakes: Map<string, SnakeLogic> = new Map();
   // Per-client AOI views
   private clientViews: Map<string, StateView> = new Map();
-  private clientAOI: Map<string, { players: Set<string>; food: Set<string> }> = new Map();
+  private clientAOI: Map<string, { players: Set<string>; food: Map<string, Food> }> = new Map();
   private playersGrid = new SpatialGrid(PhysicsConfig.AOI_RADIUS);
   private foodGrid = new SpatialGrid(PhysicsConfig.AOI_RADIUS);
 
@@ -71,8 +71,6 @@ class Block21Room extends Room<GameState> {
 
     // Message Handlers
     this.onMessage("input", (client, input) => {
-        console.log("SERVER INPUT from", client.sessionId, input);
-
         const snake = this.snakes.get(client.sessionId);
         if (!snake) {
             console.log("NO SNAKE FOUND FOR", client.sessionId);
@@ -89,7 +87,7 @@ class Block21Room extends Room<GameState> {
     );
 
     // Initial Food Spawn
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 200; i++) {
         this.spawnFood();
     }
   }
@@ -107,6 +105,7 @@ class Block21Room extends Room<GameState> {
     player.y = Math.random() * 1000 - 500;
     player.angle = Math.random() * Math.PI * 2;
     player.name = options.name || "Anonymous";
+    player.radius = PhysicsConfig.BASE_RADIUS;
     
     this.state.players.set(client.sessionId, player);
 
@@ -121,7 +120,7 @@ class Block21Room extends Room<GameState> {
     const view = new StateView();
     (client as any).view = view;
     this.clientViews.set(client.sessionId, view);
-    this.clientAOI.set(client.sessionId, { players: new Set([client.sessionId]), food: new Set() });
+    this.clientAOI.set(client.sessionId, { players: new Set([client.sessionId]), food: new Map<string, Food>() });
     // Always see yourself
     view.add(player);
   }
@@ -142,20 +141,23 @@ class Block21Room extends Room<GameState> {
 
   const headX = mySnake.player.x;
   const headY = mySnake.player.y;
+  const myRadius = mySnake.player.radius;
 
   this.snakes.forEach((otherSnake, otherSessionId) => {
     if (otherSessionId === mySessionId) return;
     if (!otherSnake.player.alive) return;
+
+    const otherRadius = otherSnake.player.radius;
 
     for (const seg of otherSnake.player.segments) {
       if (
         checkCircleCollision(
           headX,
           headY,
-          PhysicsConfig.COLLISION_RADIUS,
+          myRadius,
           seg.x,
           seg.y,
-          PhysicsConfig.COLLISION_RADIUS
+          otherRadius
         )
       ) {
         console.log(`💥 ${mySessionId} killed by ${otherSessionId}`);
@@ -181,10 +183,16 @@ update(deltaTime: number) {
 
     snake.update(dt, input);
 
+    // ⚠️ Check if snake died during its own update (Boundary or Self-Collision)
+    if (!snake.player.alive) {
+      this.killSnake(sessionId);
+      return;
+    }
+
     // ⚠️ PVP FIRST
     this.checkSnakeCollision(snake, sessionId);
 
-    // ❌ STOP if died
+    // ❌ STOP if died in PVP
     if (!snake.player.alive) return;
 
     // 🍎 FOOD ONLY IF ALIVE
@@ -215,6 +223,13 @@ update(deltaTime: number) {
       playerCandidates.forEach((pid) => {
         const p = this.state.players.get(pid);
         if (!p) return;
+        
+        // Death State Sequencing: Always include dead players in AOI for visibility
+        if (!p.alive) {
+          newPlayers.add(pid);
+          return;
+        }
+
         const dx = p.x - me.x;
         const dy = p.y - me.y;
         if ((dx * dx + dy * dy) <= radiusSq) {
@@ -239,36 +254,37 @@ update(deltaTime: number) {
       });
       aoi.players = newPlayers;
 
-      const newFood = new Set<string>();
-      const foodCandidates = this.foodGrid.query(me.x, me.y, PhysicsConfig.AOI_RADIUS);
+      const newFood = new Map<string, Food>();
+      // Food AOI Buffering: Slightly larger radius for food to prevent pop-in
+      const foodAOIRadius = PhysicsConfig.AOI_RADIUS * 1.1;
+      const foodRadiusSq = foodAOIRadius * foodAOIRadius;
+      const foodCandidates = this.foodGrid.query(me.x, me.y, foodAOIRadius);
       foodCandidates.forEach((fid) => {
         const f = this.state.food.get(fid);
         if (!f) return;
         const dx = f.x - me.x;
         const dy = f.y - me.y;
-        if ((dx * dx + dy * dy) <= radiusSq) {
-          newFood.add(fid);
+        if ((dx * dx + dy * dy) <= foodRadiusSq) {
+          newFood.set(fid, f);
         }
       });
 
-      aoi.food.forEach((fid) => {
+      // Remove food no longer in AOI OR eaten (f not in state)
+      aoi.food.forEach((f, fid) => {
         if (newFood.has(fid)) return;
-        const f = this.state.food.get(fid);
-        if (f) {
-          view.remove(f);
-        }
+        // If it was in our view but now it's not in new AOI (or it was eaten), remove it
+        view.remove(f);
       });
-      newFood.forEach((fid) => {
+
+      // Add new food
+      newFood.forEach((f, fid) => {
         if (aoi.food.has(fid)) return;
-        const f = this.state.food.get(fid);
-        if (f) {
-          view.add(f);
-        }
+        view.add(f);
       });
       aoi.food = newFood;
     });
 
-  if (this.state.food.size < 50) {
+  if (this.state.food.size < 200) {
     this.spawnFood();
   }
 }
@@ -288,10 +304,11 @@ update(deltaTime: number) {
   checkFoodCollision(snake: SnakeLogic) {
     const headX = snake.player.x;
     const headY = snake.player.y;
+    const radius = snake.player.radius;
     
     // We can iterate all food. Optimization: Grid-based spatial partition (TODO for Phase 4)
     this.state.food.forEach((food, id) => {
-        if (checkCircleCollision(headX, headY, PhysicsConfig.COLLISION_RADIUS, food.x, food.y, PhysicsConfig.FOOD_RADIUS)) {
+        if (checkCircleCollision(headX, headY, radius, food.x, food.y, PhysicsConfig.FOOD_RADIUS)) {
             // Eat Food
             snake.grow(food.value);
             this.state.food.delete(id);
@@ -302,28 +319,46 @@ update(deltaTime: number) {
   const snake = this.snakes.get(sessionId);
   if (!snake) return;
 
-  console.log("💀 Snake died:", sessionId);
+  console.log("💀 Snake died:", sessionId, "segments:", snake.player.segments.length);
 
-  snake.player.segments.forEach(seg => {
-    if (Math.random() > 0.5) {
-      const food = new Food();
-      food.x = seg.x + (Math.random() * 20 - 10);
-      food.y = seg.y + (Math.random() * 20 - 10);
-      food.value = 1;
+  // Drop food from body
+  snake.player.segments.forEach((seg, index) => {
+    // Drop food for every segment to make it obvious
+    const food = new Food();
+    food.x = seg.x + (Math.random() * 40 - 20);
+    food.y = seg.y + (Math.random() * 40 - 20);
+    food.value = 1;
 
-      this.state.food.set(
-        Math.random().toString(36).slice(2),
-        food
-      );
-    }
+    const foodId = `d_${sessionId.slice(0, 4)}_${index}`;
+    this.state.food.set(foodId, food);
   });
 
   // mark dead then remove after short delay for clients to observe death
   snake.player.alive = false;
+  const playerName = snake.player.name;
+
   this.clock.setTimeout(() => {
     this.state.players.delete(sessionId);
     this.snakes.delete(sessionId);
   }, 100);
+
+  // 3️⃣ Respawn after delay (1000ms total)
+  this.clock.setTimeout(() => {
+    console.log("Respawning player:", sessionId);
+    const player = new Player();
+    player.id = sessionId;
+    player.name = playerName;
+    player.x = Math.random() * 1000 - 500;
+    player.y = Math.random() * 1000 - 500;
+    player.angle = Math.random() * Math.PI * 2;
+    player.alive = true;
+    player.radius = PhysicsConfig.BASE_RADIUS;
+    this.state.players.set(sessionId, player);
+
+    const logic = new SnakeLogic(player);
+    logic.initSegments();
+    this.snakes.set(sessionId, logic);
+  }, 1000);
 }
 
 

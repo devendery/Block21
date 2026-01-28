@@ -7,7 +7,8 @@ export const PhysicsConfig = {
   // SERVER / PHYSICS (The Truth)
   BASE_SPEED: 220, // Slightly faster for smoother feel
   BOOST_SPEED: 400, // 1.8x boost for high-speed maneuvers
-  TURN_SPEED: Math.PI * 1.8, // Faster turning (was 1.5)
+  BASE_TURN_SPEED: Math.PI * 1.8, // Faster turning (was 1.5)
+  BASE_RADIUS: 21, // Starting visual radius
   SEGMENT_DISTANCE: 14, // Distance between segment centers
   COLLISION_RADIUS: 18, // Actual hitbox size (constant)
   INTERPOLATION_DELAY: 100, // ms
@@ -50,10 +51,26 @@ export function lerp(start: number, end: number, t: number): number {
   return start * (1 - t) + end * t;
 }
 
+export function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 // Shortest angle difference
 export function angleDifference(current: number, target: number): number {
   let diff = target - current;
   while (diff < -Math.PI) diff += Math.PI * 2;
   while (diff > Math.PI) diff -= Math.PI * 2;
   return diff;
+}
+
+export function wrapAngle(angle: number): number {
+  while (angle < -Math.PI) angle += Math.PI * 2;
+  while (angle > Math.PI) angle -= Math.PI * 2;
+  return angle;
+}
+
+export function rotateTowards(current: number, target: number, maxStep: number): number {
+  const diff = angleDifference(current, target);
+  if (Math.abs(diff) < maxStep) return target;
+  return wrapAngle(current + Math.sign(diff) * maxStep);
 }

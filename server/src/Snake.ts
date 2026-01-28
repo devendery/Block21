@@ -1,4 +1,4 @@
-import { Vector2, PhysicsConfig, normalize, angleDifference, checkCircleCollision } from './Physics';
+import { Vector2, PhysicsConfig, normalize, angleDifference, checkCircleCollision, clamp, rotateTowards, wrapAngle } from './Physics';
 import { Player, SnakeSegment } from './State';
 
 export class SnakeLogic {
@@ -7,6 +7,11 @@ export class SnakeLogic {
   // Direction Inertia (Golden Rule: Direction is persistent)
   private dirX: number = 1;
   private dirY: number = 0;
+  
+  private angularVelocity: number = 0;
+  
+  // Coiling Logic (Tight turns when spinning at one place)
+  private turnAccumulator: number = 0;
   
   // Stored Input for Physics Loop
   public lastInput: { vector: Vector2, boost: boolean } | null = null;
@@ -39,52 +44,68 @@ export class SnakeLogic {
   update(dt: number, input: { vector: Vector2, boost: boolean }) {
     if (!this.player.alive) return;
 
-    const inputVector = input.vector;
+    // 0. Update Dynamic Stats (Logarithmic Growth Model)
+    const mass = this.player.mass;
+    const length = this.player.length;
     
-    // 0. Handle Boost Speed
+    // Growth Model: Radius is the single source of truth
+    const baseRadius = 6;
+    const maxRadius = 18;
+    this.player.radius = Math.min(
+      baseRadius + Math.log2(mass + 1) * 1.8,
+      maxRadius
+    );
+    
+    // 1. Size-Aware Responsive Steering
+    const baseTurn = 0.08; 
+    const turnBoost = Math.min(0.04, length * 0.00005); 
+    
+    // Coiling Logic: Increase turn speed when consistently turning sharply (moving at one place)
+    const coilingBonus = Math.min(0.05, this.turnAccumulator * 0.002);
+    const turnSpeed = baseTurn + turnBoost + coilingBonus; 
+
+    const inputVector = input.vector;
+    const lenSq = inputVector.x * inputVector.x + inputVector.y * inputVector.y;
+    
+    if (lenSq > 0.0001) {
+        const targetAngle = Math.atan2(inputVector.y, inputVector.x);
+        const angleDiff = angleDifference(this.player.angle, targetAngle);
+        const absDiff = Math.abs(angleDiff);
+
+        // Update Turn Accumulator (Builds up when turning sharply)
+        if (absDiff > 0.4) {
+            this.turnAccumulator = Math.min(30, this.turnAccumulator + 1);
+        } else {
+            this.turnAccumulator = Math.max(0, this.turnAccumulator - 2);
+        }
+        
+        // Sharp Turn Mass Cost
+        if (absDiff > 0.25) {
+            const loss = absDiff * 0.02;
+            this.player.mass = Math.max(1, this.player.mass - loss);
+        }
+
+        // Apply Responsive Rotation
+        this.player.angle = rotateTowards(this.player.angle, targetAngle, turnSpeed);
+    } else {
+        // Decay coiling bonus if no input
+        this.turnAccumulator = Math.max(0, this.turnAccumulator - 1);
+    }
+
+    // Update Direction Vector from Angle
+    this.dirX = Math.cos(this.player.angle);
+    this.dirY = Math.sin(this.player.angle);
+
+    // 2. Handle Boost Speed
     this.player.isBoosting = input.boost;
     this.player.speed = input.boost ? PhysicsConfig.BOOST_SPEED : PhysicsConfig.BASE_SPEED;
 
-    // 1. Validate Input (Ignore weak/zero input)
-    // GOLDEN RULE: If no input, keep last direction.
-    const lenSq = inputVector.x * inputVector.x + inputVector.y * inputVector.y;
-    
-    // Only turn if input is significant
-    if (lenSq > 0.0001) {
-        // Calculate Target Angle from Input
-        const targetAngle = Math.atan2(inputVector.y, inputVector.x);
-        
-        // Calculate Current Angle from Direction
-        const currentAngle = Math.atan2(this.dirY, this.dirX);
-        
-        // Rotate towards Target
-        const diff = angleDifference(currentAngle, targetAngle);
-        const maxTurn = PhysicsConfig.TURN_SPEED * dt;
-        
-        // Apply rotation (clamped)
-        let newAngle = currentAngle;
-        if (Math.abs(diff) < maxTurn) {
-            newAngle = targetAngle;
-        } else {
-            newAngle += Math.sign(diff) * maxTurn;
-        }
-        
-        // Update Direction
-        this.dirX = Math.cos(newAngle);
-        this.dirY = Math.sin(newAngle);
-        
-        // console.log("NEW DIR:", this.dirX, this.dirY); // Debug Log
-        
-        // Update Angle (for client interpolation/rendering if needed)
-        this.player.angle = newAngle;
-    }
-    
-    // 2. Move Forward (Always using Direction Inertia)
+    // 3. Move Forward (Always using Direction Inertia)
     const moveDist = this.player.speed * dt;
     this.player.x += this.dirX * moveDist;
     this.player.y += this.dirY * moveDist;
     
-    // 3. Update Segments (Follow the head)
+    // 4. Update Segments (Follow the head)
     this.player.history.unshift({ x: this.player.x, y: this.player.y });
 
     // Prune history
@@ -95,15 +116,15 @@ export class SnakeLogic {
     // 5. Update Body Segments (Constraint Solving)
     this.updateSegments();
 
-    // 6. Check Self Collision
-    this.checkSelfCollision();
+    // 6. Check Self Collision (DISABLED as per user request)
+    // this.checkSelfCollision();
     
     // 7. Check World Boundary
     this.checkWorldBoundary();
   }
 
   grow(amount: number = 1) {
-    this.player.score += amount;
+    this.player.mass += amount;
     
     // Add segments
     for (let i = 0; i < amount; i++) {
@@ -118,7 +139,7 @@ export class SnakeLogic {
   }
 
   private checkWorldBoundary() {
-    const r = PhysicsConfig.COLLISION_RADIUS;
+    const r = this.player.radius; // Use dynamic radius
     const limit = PhysicsConfig.MAP_SIZE / 2;
     
     const distSq = this.player.x * this.player.x + this.player.y * this.player.y;
@@ -131,12 +152,29 @@ export class SnakeLogic {
   }
 
   private checkSelfCollision() {
-    const safeZone = 5; 
+    // Safety Rule: Disabled for very small snakes
+    if (this.player.length < 12) return;
+
+    const headX = this.player.x;
+    const headY = this.player.y;
     
-    for (let i = safeZone; i < this.player.segments.length; i++) {
+    // Safety Rule: Ignore neck segments (first 6) to prevent false positives
+    const neckSafety = 6;
+    
+    // Collision buffer (0.85 radius)
+    const radiusSq = Math.pow(this.player.radius * 0.85, 2);
+    
+    for (let i = neckSafety; i < this.player.segments.length; i++) {
         const seg = this.player.segments[i];
-        if (seg && checkCircleCollision(this.player.x, this.player.y, PhysicsConfig.COLLISION_RADIUS, seg.x, seg.y, PhysicsConfig.COLLISION_RADIUS)) {
+        if (!seg) continue;
+        
+        const dx = headX - seg.x;
+        const dy = headY - seg.y;
+        
+        // Distance-squared check for performance
+        if (dx * dx + dy * dy < radiusSq) {
             this.player.alive = false;
+            // Room.killSnake will be called in index.ts when it detects alive=false
             return;
         }
     }

@@ -196,20 +196,21 @@ private updateCameraZoom() {
   const player = this.room.state.players.get(this.mySessionId);
   if (!player) return;
 
-  // Use segments OR score
-  const size = player.segments?.length ?? 10;
+  const length = player.length || 0;
 
   // Bigger snake → smaller zoom
-  let targetZoom = Phaser.Math.Clamp(
-    1.2 - size * 0.01,
+  const targetZoom = Phaser.Math.Clamp(
+    1.1 - length * 0.0012,
     this.MIN_ZOOM,
     this.MAX_ZOOM
   );
 
   const cam = this.cameras.main;
-  cam.setZoom(
-    Phaser.Math.Linear(cam.zoom, targetZoom, this.ZOOM_LERP)
-  );
+  
+  // Biased Zoom Lerp: Faster zoom-out (0.08), Slower zoom-in (0.03)
+  const zoomLerp = targetZoom < cam.zoom ? 0.08 : 0.03;
+  
+  cam.zoom += (targetZoom - cam.zoom) * zoomLerp;
 }
 
 
@@ -308,8 +309,18 @@ private playDeathExplosion(x: number, y: number) {
   // 2. Update local camera proxy ONLY if my snake exists
   if (this.mySessionId && this.snakeRenderers.has(this.mySessionId)) {
     const renderer = this.snakeRenderers.get(this.mySessionId)!;
-    this.localSnakeProxy.x = renderer.displayX;
-    this.localSnakeProxy.y = renderer.displayY;
+    const player = this.room.state.players.get(this.mySessionId);
+    
+    if (player) {
+      // Look-ahead logic
+      const lookAhead = 40;
+      const targetX = renderer.displayX + Math.cos(renderer.displayAngle) * lookAhead;
+      const targetY = renderer.displayY + Math.sin(renderer.displayAngle) * lookAhead;
+      
+      // Lerp the proxy for smooth camera follow
+      this.localSnakeProxy.x = Phaser.Math.Linear(this.localSnakeProxy.x, targetX, 0.12);
+      this.localSnakeProxy.y = Phaser.Math.Linear(this.localSnakeProxy.y, targetY, 0.12);
+    }
   }
 
   // 3. Process input

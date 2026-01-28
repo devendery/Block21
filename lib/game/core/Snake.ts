@@ -75,7 +75,7 @@ export class Snake {
         
         // Rotate towards Target
         const diff = angleDifference(currentAngle, targetAngle);
-        const maxTurn = PhysicsConfig.TURN_SPEED * dt;
+        const maxTurn = PhysicsConfig.BASE_TURN_SPEED * dt;
         
         // Apply rotation (clamped)
         let newAngle = currentAngle;

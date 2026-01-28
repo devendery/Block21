@@ -183,14 +183,14 @@ class GameRuntimeInstance {
         const aliveCount = alive.length;
         
         const me = list.find((p) => p?.id === room.sessionId);
-        const score = Number(me?.score) || 0;
+        const mass = Number(me?.mass) || 0;
         
-        const ranked = [...alive].sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+        const ranked = [...alive].sort((a, b) => (Number(b.mass) || 0) - (Number(a.mass) || 0));
         const rankIndex = ranked.findIndex((p) => p?.id === room.sessionId);
         const rank = rankIndex >= 0 ? rankIndex + 1 : 0;
 
         this.opts.onStats?.({
-            score,
+            score: mass,
             rank,
             aliveCount,
             playerCount: count,
@@ -294,10 +294,13 @@ class GameRuntimeInstance {
           });
         }
 
-        drawBody(x: number, y: number, i: number, palette: any, alive: boolean, skinName: string) {
+        drawBody(x: number, y: number, i: number, palette: any, alive: boolean, skinName: string, radius: number, totalLength: number) {
           const px = x * baseGridSize + baseGridSize / 2;
           const py = y * baseGridSize + baseGridSize / 2;
-          const s = baseGridSize - 2; // Slightly smaller for separation
+          
+          // Looks wise same as previous: Use baseGridSize instead of dynamic radius
+          const s = baseGridSize - 2; 
+          
           const alpha = alive ? Math.max(0.2, 1 - i * 0.02) : 0.35;
           
           this.sprites.fillStyle(alive ? palette.secondary : 0x2b2b2b, alpha);
@@ -323,9 +326,11 @@ class GameRuntimeInstance {
           }
         }
 
-        drawHead(x: number, y: number, angle: number, palette: any, eyeStyle: string, mouthStyle: string, alive: boolean, skinName: string) {
+        drawHead(x: number, y: number, angle: number, palette: any, eyeStyle: string, mouthStyle: string, alive: boolean, skinName: string, radius: number) {
           const px = x * baseGridSize + baseGridSize / 2;
           const py = y * baseGridSize + baseGridSize / 2;
+          
+          // Looks wise same as previous: Use baseGridSize instead of dynamic radius
           const size = baseGridSize;
           const alpha = alive ? 1 : 0.45;
           
@@ -335,7 +340,8 @@ class GameRuntimeInstance {
           this.sprites.fillStyle(alive ? palette.primary : 0x444444, alpha * 0.9);
           this.sprites.fillCircle(px, py, size * 0.35);
 
-          const eyeOff = size * 0.25;
+          // Eyes inside: Reduced offset from 0.25 to 0.2
+          const eyeOff = size * 0.20;
           const eyeR = size * 0.12;
           
           const cos = Math.cos(angle);
@@ -525,7 +531,9 @@ class GameRuntimeInstance {
              const sx = typeof p?.x === "number" ? p.x : null;
              const sy = typeof p?.y === "number" ? p.y : null;
              const serverAngle = typeof p?.angle === "number" ? p.angle : null;
+             const mass = typeof p?.mass === "number" ? p.mass : 0;
              const length = typeof p?.length === "number" ? p.length : 0;
+             const radius = typeof p?.radius === "number" ? p.radius : 10;
              if (sx === null || sy === null) return;
              
              let vis = this.visuals.get(key);
@@ -534,10 +542,13 @@ class GameRuntimeInstance {
                this.visuals.set(key, vis);
              }
 
-             vis.x = vis.x + (sx - vis.x) * 0.18;
-             vis.y = vis.y + (sy - vis.y) * 0.18;
+             // Dynamic Interpolation based on length
+             const t = Phaser.Math.Clamp(0.3 + length * 0.0003, 0.3, 0.55);
+
+             vis.x = vis.x + (sx - vis.x) * t;
+             vis.y = vis.y + (sy - vis.y) * t;
              if (serverAngle !== null) {
-               vis.angle = Phaser.Math.Angle.RotateTo(vis.angle, serverAngle, 0.22);
+               vis.angle = Phaser.Math.Angle.RotateTo(vis.angle, serverAngle, t + 0.04);
              }
              
              vis.history.unshift({ x: vis.x, y: vis.y });
@@ -550,19 +561,24 @@ class GameRuntimeInstance {
                vis.history.pop();
              }
 
-             this.drawHead(vis.x, vis.y, vis.angle, paletteMe, eyeStyle, mouthStyle, alive, skinName);
+             this.drawHead(vis.x, vis.y, vis.angle, paletteMe, eyeStyle, mouthStyle, alive, skinName, radius);
 
              for (let i = 1; i < renderCount; i++) {
                const historyIdx = Math.floor(i * spacing * lodFactor);
                if (historyIdx >= vis.history.length) break;
                const pt = vis.history[historyIdx];
-               this.drawBody(pt.x, pt.y, i, paletteMe, alive, skinName);
+               this.drawBody(pt.x, pt.y, i, paletteMe, alive, skinName, radius, length);
              }
 
              if (isMe) {
-               this.dummyCam.setPosition(vis.x * baseGridSize, vis.y * baseGridSize);
-               const targetZoom = Phaser.Math.Clamp(1.1 - length * 0.0012, 0.65, 1.1);
-               this.cameras.main.setZoom(this.cameras.main.zoom + (targetZoom - this.cameras.main.zoom) * 0.05);
+               // Camera Follow Smoothing
+               const followLerp = 0.08;
+               this.dummyCam.x += (vis.x * baseGridSize - this.dummyCam.x) * followLerp;
+               this.dummyCam.y += (vis.y * baseGridSize - this.dummyCam.y) * followLerp;
+
+               // Mass-based Camera Zoom
+               const targetZoom = Phaser.Math.Clamp(1.15 - Math.log10(mass + 1) * 0.22, 0.7, 1.15);
+               this.cameras.main.setZoom(this.cameras.main.zoom + (targetZoom - this.cameras.main.zoom) * 0.04);
              }
           };
 
