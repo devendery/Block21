@@ -4,7 +4,7 @@ import { Client, Room } from 'colyseus.js';
 import { SnakeRenderer } from './SnakeRenderer';
 import { InputManager } from './Input';
 import { GameState, Player, Food } from './ClientState';
-import { PhysicsConfig } from '../core/Physics';
+import { PhysicsConfig, VisualConfig, Vector2, angleDifference } from '../core/Physics';
 
 export class MainScene extends Phaser.Scene {
   private client!: Client;
@@ -28,8 +28,17 @@ export class MainScene extends Phaser.Scene {
   // Camera proxy (authoritative from STATE)
   private localSnakeProxy = { x: 0, y: 0, width: 0, height: 0 };
 
+  // Viewport responsive scaling
+  private baseViewportSize = 1200; // Reference viewport width for scaling
+  private currentViewportScale = 1;
+
   private lastInputSentAt = 0;
-  private INPUT_SEND_INTERVAL = 50;
+  private INPUT_SEND_INTERVAL = 16;
+
+  private inputSeq = 0;
+  private lastAckInputSeq = 0;
+  private pendingInputs: { seq: number; vector: Vector2; boost: boolean }[] = [];
+  private predictedLocal: { x: number; y: number; angle: number; dirX: number; dirY: number } | null = null;
 
   private roomHandlersBound = false;
 private MIN_ZOOM = 0.45;
@@ -38,6 +47,24 @@ private ZOOM_LERP = 0.04;
 
   constructor() {
     super('MainScene');
+  }
+
+  // Update viewport scaling based on window size
+  private updateViewportScaling() {
+    const viewportWidth = this.cameras.main.width;
+    const viewportHeight = this.cameras.main.height;
+    
+    // Use the smaller dimension for consistent scaling
+    const minDimension = Math.min(viewportWidth, viewportHeight);
+    
+    // Calculate scale factor based on reference size (1200px)
+    this.currentViewportScale = Math.max(0.5, Math.min(2.0, minDimension / this.baseViewportSize));
+    
+    // Update VisualConfig with scaled render radius
+    // We need to modify the imported object directly
+    VisualConfig.RENDER_RADIUS = VisualConfig.BASE_RENDER_RADIUS * this.currentViewportScale;
+    
+    console.log(`Viewport scaling updated: ${this.currentViewportScale.toFixed(2)}x (${viewportWidth}x${viewportHeight})`);
   }
 preload() {
   this.textures.generate('particle', {
@@ -52,6 +79,18 @@ preload() {
     this.createEnvironment();
     this.createUI();
     this.inputManager = new InputManager(this, this.localSnakeProxy as any);
+
+    // Handle window resize for responsive scaling
+    const handleResize = () => {
+      if (this.scene.isActive()) {
+        this.updateViewportScaling();
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      window.removeEventListener('resize', handleResize);
+    });
 
     this.client = new Client("ws://localhost:2567");
 
@@ -77,14 +116,26 @@ preload() {
       this.setupRoomHandlers();
 
       // ✅ cleanup on reload / tab close
-      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-        if (this.room && this.room.connection.isOpen) {
-          this.room.leave();
-        }
-        // Cleanup UI
-        this.foodTexts.forEach(txt => txt.destroy());
-        this.foodTexts.clear();
-      });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      if (this.room && this.room.connection.isOpen) {
+        this.room.leave();
+      }
+      // Cleanup UI
+      this.foodTexts.forEach(txt => txt.destroy());
+      this.foodTexts.clear();
+    });
+
+    // Handle window resize for responsive scaling
+    const handleResize = () => {
+      if (this.scene.isActive()) {
+        this.updateViewportScaling();
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      window.removeEventListener('resize', handleResize);
+    });
 
     } catch (e) {
       console.error("Join error", e);
@@ -93,6 +144,9 @@ preload() {
   }
 
   createEnvironment() {
+    // Update viewport scaling
+    this.updateViewportScaling();
+    
     // Worms Zone style blue background
     this.cameras.main.setBackgroundColor('#1a5276');
 
@@ -191,48 +245,122 @@ preload() {
   }
   
 private updateCameraZoom() {
-  if (!this.mySessionId) return;
+    if (!this.mySessionId) return;
 
-  const player = this.room.state.players.get(this.mySessionId);
-  if (!player) return;
+    const player = this.room.state.players.get(this.mySessionId);
+    if (!player) return;
 
-  // Use segments OR score
-  const size = player.segments?.length ?? 10;
+    // Use segments OR score
+    const size = player.segments?.length ?? 10;
 
-  // Bigger snake → smaller zoom
-  let targetZoom = Phaser.Math.Clamp(
-    1.2 - size * 0.01,
-    this.MIN_ZOOM,
-    this.MAX_ZOOM
-  );
+    // Worms Zone Style Zoom
+    // Base zoom starts high (0.9) and decreases slowly as you grow.
+    // Logarithmic falloff prevents it from becoming a tiny dot too quickly.
+    // 500 segments (start) -> ~0.6
+    // 5000 segments -> ~0.3
+    
+    // Formula: Base - (Size * Factor)
+    // Let's use a gentle curve.
+    // 500 * 0.0004 = 0.2. 1.0 - 0.2 = 0.8.
+    // 5000 * 0.0004 = 2.0. Too much.
+    
+    // Let's use 1 / (1 + size * k)
+    // size 500 -> 1 / (1 + 0.5) = 0.66
+    // size 5000 -> 1 / (1 + 5) = 0.16 (Too small)
+    
+    // Custom Curve:
+    // Max Zoom (Small snake): 0.9
+    // Min Zoom (Giant snake): 0.3
+    
+    const progress = Math.min(size / 10000, 1); // 0 to 1 scaling up to 10k length
+    const targetZoom = Phaser.Math.Linear(0.9, 0.35, Math.sqrt(progress));
 
-  const cam = this.cameras.main;
-  cam.setZoom(
-    Phaser.Math.Linear(cam.zoom, targetZoom, this.ZOOM_LERP)
-  );
-}
+    const cam = this.cameras.main;
+    cam.setZoom(
+      Phaser.Math.Linear(cam.zoom, targetZoom, this.ZOOM_LERP)
+    );
+  }
 
 
   handlePlayerAdd(player: Player, sessionId: string) {
    // 🚫 Block duplicate OR post-death recreation
-if (this.snakeRenderers.has(sessionId)) {
-  console.warn("Duplicate snake blocked:", sessionId);
-  return;
-}
+    if (this.snakeRenderers.has(sessionId)) {
+      console.warn("Duplicate snake blocked:", sessionId);
+      return;
+    }
 
 
     console.log("Player joined:", sessionId);
 
-    const renderer = new SnakeRenderer(this, player);
+    const renderer = new SnakeRenderer(this, player, sessionId === this.mySessionId);
     this.snakeRenderers.set(sessionId, renderer);
 
+    // ✅ Listen for Death (Immediate Explosion)
+    (player as any).onChange = (changes: any[]) => {
+        try {
+            changes.forEach(change => {
+                if (change.field === "alive" && change.value === false) {
+                     const r = this.snakeRenderers.get(sessionId);
+                     if (r) {
+                         this.playDeathExplosion(r.displayX, r.displayY);
+                     }
+                }
+            });
+        } catch (e) {
+            console.error("Death FX Error:", e);
+        }
+    };
+
     if (sessionId === this.mySessionId) {
+      this.predictedLocal = {
+        x: player.x,
+        y: player.y,
+        angle: player.angle,
+        dirX: Math.cos(player.angle),
+        dirY: Math.sin(player.angle),
+      };
+      this.pendingInputs = [];
+      this.lastAckInputSeq = player.lastAckInputSeq ?? 0;
       this.cameras.main.startFollow(
         this.localSnakeProxy as any,
-        true, 0.1, 0.1
+        true, 0.05, 0.05  // Faster lerp for better centering
       );
     }
   } 
+
+  private applyPredictionStep(
+    state: { x: number; y: number; angle: number; dirX: number; dirY: number },
+    input: { vector: Vector2; boost: boolean },
+    dt: number,
+    segmentCount: number
+  ) {
+    const canBoost = input.boost && segmentCount > 10;
+    const speed = canBoost ? PhysicsConfig.BOOST_SPEED : PhysicsConfig.BASE_SPEED;
+
+    const inputVector = input.vector;
+    const lenSq = inputVector.x * inputVector.x + inputVector.y * inputVector.y;
+
+    if (lenSq > 0.0001) {
+      const targetAngle = Math.atan2(inputVector.y, inputVector.x);
+      const currentAngle = Math.atan2(state.dirY, state.dirX);
+      const diff = angleDifference(currentAngle, targetAngle);
+      const maxTurn = PhysicsConfig.TURN_SPEED * dt;
+
+      let newAngle = currentAngle;
+      if (Math.abs(diff) < maxTurn) {
+        newAngle = targetAngle;
+      } else {
+        newAngle += Math.sign(diff) * maxTurn;
+      }
+
+      state.dirX = Math.cos(newAngle);
+      state.dirY = Math.sin(newAngle);
+      state.angle = newAngle;
+    }
+
+    state.x += state.dirX * speed * dt;
+    state.y += state.dirY * speed * dt;
+  }
 
 
 handlePlayerRemove(_player: Player, sessionId: string) {
@@ -244,8 +372,11 @@ handlePlayerRemove(_player: Player, sessionId: string) {
     const x = renderer.displayX;
     const y = renderer.displayY;
 
-    // 💥 Explosion FIRST
-    this.playDeathExplosion(x, y);
+    // 💥 Explosion ONLY if not already dead (Disconnect or instant removal)
+    // If they died (alive=false), we already exploded via onChange.
+    if (_player.alive) {
+        this.playDeathExplosion(x, y);
+    }
 
     // 🧹 Then destroy renderer
     renderer.destroy();
@@ -300,25 +431,78 @@ private playDeathExplosion(x: number, y: number) {
   if (!this.room.state) return;
   if (!this.room.state.players) return;
 
-  // 1. Update all snake renderers
-  this.snakeRenderers.forEach(renderer => {
+  const input = this.inputManager.update();
+
+  if (this.mySessionId) {
+    const player = this.room.state.players.get(this.mySessionId);
+    const renderer = this.snakeRenderers.get(this.mySessionId);
+
+    if (player && renderer && player.alive) {
+      if (!this.predictedLocal) {
+        this.predictedLocal = {
+          x: player.x,
+          y: player.y,
+          angle: player.angle,
+          dirX: Math.cos(player.angle),
+          dirY: Math.sin(player.angle),
+        };
+        this.pendingInputs = [];
+        this.lastAckInputSeq = player.lastAckInputSeq ?? 0;
+      }
+
+      const ack = player.lastAckInputSeq ?? 0;
+      if (ack !== this.lastAckInputSeq && this.predictedLocal) {
+        this.lastAckInputSeq = ack;
+        this.pendingInputs = this.pendingInputs.filter((p) => p.seq > ack);
+
+        const rebuilt = {
+          x: player.x,
+          y: player.y,
+          angle: player.angle,
+          dirX: Math.cos(player.angle),
+          dirY: Math.sin(player.angle),
+        };
+
+        const segmentCount = player.segments?.length ?? 0;
+        const dtStep = this.INPUT_SEND_INTERVAL / 1000;
+        for (const p of this.pendingInputs) {
+          this.applyPredictionStep(rebuilt, p, dtStep, segmentCount);
+        }
+
+        this.predictedLocal = rebuilt;
+      }
+
+      if (time - this.lastInputSentAt > this.INPUT_SEND_INTERVAL && this.predictedLocal) {
+        const seq = ++this.inputSeq;
+        const msg = { ...input, seq };
+        this.room.send("input", msg);
+        this.pendingInputs.push({ seq, vector: input.vector, boost: input.boost });
+
+        const segmentCount = player.segments?.length ?? 0;
+        const dtStep = this.INPUT_SEND_INTERVAL / 1000;
+        this.applyPredictionStep(this.predictedLocal, input, dtStep, segmentCount);
+
+        this.lastInputSentAt = time;
+      }
+
+      renderer.setPredictedPose({
+        x: this.predictedLocal?.x ?? player.x,
+        y: this.predictedLocal?.y ?? player.y,
+        angle: this.predictedLocal?.angle ?? player.angle,
+      });
+    } else if (renderer) {
+      renderer.setPredictedPose(null);
+    }
+  }
+
+  this.snakeRenderers.forEach((renderer) => {
     renderer.update();
   });
 
-  // 2. Update local camera proxy ONLY if my snake exists
   if (this.mySessionId && this.snakeRenderers.has(this.mySessionId)) {
     const renderer = this.snakeRenderers.get(this.mySessionId)!;
     this.localSnakeProxy.x = renderer.displayX;
     this.localSnakeProxy.y = renderer.displayY;
-  }
-
-  // 3. Process input
-  const inputVector = this.inputManager.update();
-
-  // 4. Send input to server (throttled)
-  if (time - this.lastInputSentAt > this.INPUT_SEND_INTERVAL) {
-    this.room.send("input", inputVector);
-    this.lastInputSentAt = time;
   }
 
   // 5. Render food (Emoji Style)
@@ -344,7 +528,8 @@ private updateFood() {
       for (let i = 0; i < id.length; i++) hash = (hash << 5) - hash + id.charCodeAt(i);
       const emoji = this.FOOD_EMOJIS[Math.abs(hash) % this.FOOD_EMOJIS.length];
       
-      const txt = this.add.text(food.x, food.y, emoji, { fontSize: "24px" })
+      // Make icon bigger (User Request: "icon little big")
+      const txt = this.add.text(food.x, food.y, emoji, { fontSize: "42px" })
         .setOrigin(0.5)
         .setDepth(1);
       this.foodTexts.set(id, txt);

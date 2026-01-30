@@ -2,11 +2,13 @@ import http from "http";
 import express from "express";
 import cors from "cors";
 import { Server, Room, Client } from "colyseus";
-import { StateView } from "@colyseus/schema";
+import { StateView, Encoder } from "@colyseus/schema";
 // import { monitor } from "@colyseus/monitor";
 import { GameState, Player, SnakeSegment, Food } from "./State";
 import { SnakeLogic } from "./Snake";
 import { PhysicsConfig, checkCircleCollision } from "./Physics";
+
+Encoder.BUFFER_SIZE = 256 * 1024;
 
 class SpatialGrid {
   private cellSize: number;
@@ -63,6 +65,16 @@ class Block21Room extends Room<GameState> {
   private clientAOI: Map<string, { players: Set<string>; food: Set<string> }> = new Map();
   private playersGrid = new SpatialGrid(PhysicsConfig.AOI_RADIUS);
   private foodGrid = new SpatialGrid(PhysicsConfig.AOI_RADIUS);
+  private tickCounter = 0;
+  private readonly GRID_REBUILD_EVERY = 2;
+
+  private getAoiRadius(me: Player) {
+    const len = me.length || 0;
+    const progress = Math.max(0, Math.min(1, len / 2000));
+    const base = PhysicsConfig.AOI_RADIUS;
+    const max = PhysicsConfig.AOI_RADIUS * 2;
+    return base + (max - base) * Math.sqrt(progress);
+  }
 
     onCreate (options: any) {
     console.log("Block21 Room Created!");
@@ -71,11 +83,8 @@ class Block21Room extends Room<GameState> {
 
     // Message Handlers
     this.onMessage("input", (client, input) => {
-        console.log("SERVER INPUT from", client.sessionId, input);
-
         const snake = this.snakes.get(client.sessionId);
         if (!snake) {
-            console.log("NO SNAKE FOUND FOR", client.sessionId);
             return;
         }
 
@@ -89,7 +98,7 @@ class Block21Room extends Room<GameState> {
     );
 
     // Initial Food Spawn
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 500; i++) {
         this.spawnFood();
     }
   }
@@ -107,6 +116,9 @@ class Block21Room extends Room<GameState> {
     player.y = Math.random() * 1000 - 500;
     player.angle = Math.random() * Math.PI * 2;
     player.name = options.name || "Anonymous";
+    
+    // Assign Random Skin (0 to 5)
+    player.skin = Math.floor(Math.random() * 6);
     
     this.state.players.set(client.sessionId, player);
 
@@ -138,38 +150,105 @@ class Block21Room extends Room<GameState> {
     console.log("room disposed");
   }
  checkSnakeCollision(mySnake: SnakeLogic, mySessionId: string) {
-  if (!mySnake.player.alive) return;
+    if (!mySnake.player.alive) return;
 
-  const headX = mySnake.player.x;
-  const headY = mySnake.player.y;
+    const headX = mySnake.player.x;
+    const headY = mySnake.player.y;
 
-  this.snakes.forEach((otherSnake, otherSessionId) => {
-    if (otherSessionId === mySessionId) return;
-    if (!otherSnake.player.alive) return;
+    this.snakes.forEach((otherSnake, otherSessionId) => {
+      if (otherSessionId === mySessionId) return;
+      if (!otherSnake.player.alive) return;
 
-    for (const seg of otherSnake.player.segments) {
-      if (
-        checkCircleCollision(
-          headX,
-          headY,
-          PhysicsConfig.COLLISION_RADIUS,
-          seg.x,
-          seg.y,
-          PhysicsConfig.COLLISION_RADIUS
-        )
-      ) {
-        console.log(`💥 ${mySessionId} killed by ${otherSessionId}`);
-        mySnake.player.alive = false;
-        this.killSnake(mySessionId);
-        return;
+      // Optimization: Bounding Box Check first?
+      // For now, iterate segments.
+      // Worms Zone Logic: Head touches ANY part of other snake -> Death.
+      // Including other snake's head? Yes.
+      // If Head vs Head -> Both die? Or smaller dies?
+      // Let's implement: Both die if Head-on-Head.
+      
+      // Check Head-on-Head Collision first (with slightly larger radius?)
+      const otherHeadX = otherSnake.player.x;
+      const otherHeadY = otherSnake.player.y;
+      if (checkCircleCollision(headX, headY, PhysicsConfig.COLLISION_RADIUS, otherHeadX, otherHeadY, PhysicsConfig.COLLISION_RADIUS)) {
+           console.log(`💥 HEAD-ON-HEAD: ${mySessionId} vs ${otherSessionId}`);
+           
+           // Kill ME
+           mySnake.player.alive = false;
+           this.killSnake(mySessionId);
+           
+           // Kill THEM (Mutual Destruction)
+           if (otherSnake.player.alive) {
+               otherSnake.player.alive = false;
+               this.killSnake(otherSessionId);
+           }
+           
+           return;
       }
-    }
-  });
-}
+
+      for (const seg of otherSnake.getSegmentsForCollision()) {
+        if (
+          checkCircleCollision(
+            headX,
+            headY,
+            PhysicsConfig.COLLISION_RADIUS,
+            seg.x,
+            seg.y,
+            PhysicsConfig.COLLISION_RADIUS
+          )
+        ) {
+          console.log(`💥 ${mySessionId} ran into body of ${otherSessionId}`);
+          mySnake.player.alive = false;
+          this.killSnake(mySessionId);
+          return;
+        }
+      }
+    });
+  }
+
+  killSnake(sessionId: string) {
+      const snake = this.snakes.get(sessionId);
+      if (!snake) return;
+      
+      console.log(`☠️ KILLING SNAKE ${sessionId} - Spawning Food`);
+      
+      // Convert body to food
+      let spawnedCount = 0;
+      snake.getSegmentsForCollision().forEach((seg, index) => {
+          // Spawn food for every 2nd segment (50% conversion)
+          if (index % 2 !== 0) return;
+          
+          const food = new Food();
+          food.x = seg.x + (Math.random() * 20 - 10); 
+          food.y = seg.y + (Math.random() * 20 - 10);
+          food.value = PhysicsConfig.FOOD_VALUE * 5; // Big chunks for big snakes!
+          
+          const id = Math.random().toString(36).substr(2, 9);
+          this.state.food.set(id, food);
+          // Explicitly add to grid so AOI picks it up immediately
+          this.foodGrid.insert(id, food.x, food.y);
+          spawnedCount++;
+      });
+      
+      console.log(`   -> Spawned ${spawnedCount} food items.`);
+
+      // Mark dead but keep in state for a moment so client receives the food updates
+      snake.player.alive = false;
+      
+      // Delay removal to allow client to process the death and see the food
+      setTimeout(() => {
+        if (this.state.players.has(sessionId)) {
+            this.state.players.delete(sessionId);
+            this.snakes.delete(sessionId);
+            this.clientViews.delete(sessionId);
+            this.clientAOI.delete(sessionId);
+        }
+      }, 2000); 
+  }
 
 
 update(deltaTime: number) {
   const dt = deltaTime / 1000;
+  this.tickCounter++;
 
   this.snakes.forEach((snake, sessionId) => {
     if (!snake.player.alive) return;
@@ -180,6 +259,24 @@ update(deltaTime: number) {
     };
 
     snake.update(dt, input);
+    const seq = (input as any).seq;
+    if (typeof seq === "number") {
+      snake.player.lastAckInputSeq = seq;
+    }
+
+    // 🚀 BOOST COST LOGIC (Worms Zone Style: Cost but NO food trail)
+    if (snake.player.isBoosting) {
+      // Drop mass periodically (approx every 10 frames = 6 times/sec)
+      if (Math.random() < 0.15) {
+        // Just shrink, do NOT spawn food
+        const dropped = snake.shrink(0.25); 
+        if (!dropped) {
+          // Cannot shrink further, stop boosting
+          snake.player.isBoosting = false;
+          snake.player.speed = PhysicsConfig.BASE_SPEED;
+        }
+      }
+    }
 
     // ⚠️ PVP FIRST
     this.checkSnakeCollision(snake, sessionId);
@@ -191,18 +288,19 @@ update(deltaTime: number) {
     this.checkFoodCollision(snake);
   });
 
-    this.playersGrid.clear();
-    this.state.players.forEach((p, id) => {
-      this.playersGrid.insert(id, p.x, p.y);
-    });
+    if (this.tickCounter % this.GRID_REBUILD_EVERY === 0) {
+      this.playersGrid.clear();
+      this.state.players.forEach((p, id) => {
+        this.playersGrid.insert(id, p.x, p.y);
+      });
 
-    this.foodGrid.clear();
-    this.state.food.forEach((f, id) => {
-      this.foodGrid.insert(id, f.x, f.y);
-    });
+      this.foodGrid.clear();
+      this.state.food.forEach((f, id) => {
+        this.foodGrid.insert(id, f.x, f.y);
+      });
+    }
 
     // AOI filtering per client
-    const radiusSq = PhysicsConfig.AOI_RADIUS * PhysicsConfig.AOI_RADIUS;
     this.clients.forEach((client) => {
       const myId = client.sessionId;
       const me = this.state.players.get(myId);
@@ -210,8 +308,11 @@ update(deltaTime: number) {
       const aoi = this.clientAOI.get(myId);
       if (!me || !view || !aoi) return;
 
+      const radius = this.getAoiRadius(me);
+      const radiusSq = radius * radius;
+
       const newPlayers = new Set<string>();
-      const playerCandidates = this.playersGrid.query(me.x, me.y, PhysicsConfig.AOI_RADIUS);
+      const playerCandidates = this.playersGrid.query(me.x, me.y, radius);
       playerCandidates.forEach((pid) => {
         const p = this.state.players.get(pid);
         if (!p) return;
@@ -240,7 +341,7 @@ update(deltaTime: number) {
       aoi.players = newPlayers;
 
       const newFood = new Set<string>();
-      const foodCandidates = this.foodGrid.query(me.x, me.y, PhysicsConfig.AOI_RADIUS);
+      const foodCandidates = this.foodGrid.query(me.x, me.y, radius);
       foodCandidates.forEach((fid) => {
         const f = this.state.food.get(fid);
         if (!f) return;
@@ -298,33 +399,7 @@ update(deltaTime: number) {
         }
     });
   }
- killSnake(sessionId: string) {
-  const snake = this.snakes.get(sessionId);
-  if (!snake) return;
 
-  console.log("💀 Snake died:", sessionId);
-
-  snake.player.segments.forEach(seg => {
-    if (Math.random() > 0.5) {
-      const food = new Food();
-      food.x = seg.x + (Math.random() * 20 - 10);
-      food.y = seg.y + (Math.random() * 20 - 10);
-      food.value = 1;
-
-      this.state.food.set(
-        Math.random().toString(36).slice(2),
-        food
-      );
-    }
-  });
-
-  // mark dead then remove after short delay for clients to observe death
-  snake.player.alive = false;
-  this.clock.setTimeout(() => {
-    this.state.players.delete(sessionId);
-    this.snakes.delete(sessionId);
-  }, 100);
-}
 
 
 
@@ -338,9 +413,11 @@ const gameServer = new Server({
   server: http.createServer(app)
 });
 
-gameServer.define('block21', Block21Room);
+const roomName = process.env.BLOCK21_ROOM_NAME || "block21";
+const region = process.env.BLOCK21_REGION || "local";
+gameServer.define(roomName, Block21Room);
 
 // app.use("/colyseus", monitor());
 
 gameServer.listen(2567);
-console.log(`Listening on ws://localhost:2567`);
+console.log(`Listening on ws://localhost:2567 (${region}) room=${roomName}`);

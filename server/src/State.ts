@@ -22,6 +22,8 @@ export class Player extends Schema {
     @type("number") speed: number = 0;
     @type("boolean") isBoosting: boolean = false;
     @type("number") length: number = 0;
+    @type("number") skin: number = 0; // 0 to N skin ID
+    @type("number") lastAckInputSeq: number = 0;
     
     // Physics State (Not synced, but used for logic)
     dirX: number = 1;

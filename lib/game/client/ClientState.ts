@@ -21,6 +21,8 @@ export class Player extends Schema {
   @type("number") speed: number = 0;
   @type("boolean") isBoosting: boolean = false;
   @type("number") length: number = 0;
+  @type("number") skin: number = 0;
+  @type("number") lastAckInputSeq: number = 0;
 
   @type([SnakeSegment]) segments = new ArraySchema<SnakeSegment>();
   @type([PathPoint]) pathPoints = new ArraySchema<PathPoint>();
