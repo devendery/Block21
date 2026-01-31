@@ -76,7 +76,7 @@ export class Snake {
         const targetAngle = Math.atan2(inputVector.y, inputVector.x);
         const currentAngle = Math.atan2(this.dirY, this.dirX);
         const diff = angleDifference(currentAngle, targetAngle);
-        const maxTurn = PhysicsConfig.TURN_SPEED * dt;
+        const maxTurn = PhysicsConfig.BASE_TURN_SPEED * dt;
         
         let newAngle = currentAngle;
         if (Math.abs(diff) < maxTurn) {

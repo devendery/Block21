@@ -453,6 +453,7 @@ update() {
       const scale = 1 - smoothT * (1 - VisualConfig.TAIL_MIN_SCALE);
       
       const radius = VisualConfig.RENDER_RADIUS * scale;
+      // const radius = this.snake.radius * scale; // Use dynamic radius from server
 
       // 1. Striped Shell
       // Alternate color every 2 segments for broader stripes
@@ -472,6 +473,7 @@ update() {
     
     // Head Shadow
     this.shadowGraphics.fillCircle(this.displayX + shadowOffset, this.displayY + shadowOffset, VisualConfig.RENDER_RADIUS);
+    // this.shadowGraphics.fillCircle(this.displayX + shadowOffset, this.displayY + shadowOffset, this.snake.radius);
 
     // Body Shadows (Tapered)
     const totalSegments = this.displaySegments.length;
@@ -486,7 +488,8 @@ update() {
         const scale = 1 - smoothT * (1 - VisualConfig.TAIL_MIN_SCALE);
         
         const radius = VisualConfig.RENDER_RADIUS * scale;
-        
+        // const radius = this.snake.radius * scale;
+
         const shadowAlpha = VisualConfig.SHADOW_ALPHA * scale; 
         this.shadowGraphics.fillStyle(0x000000, shadowAlpha);
         this.shadowGraphics.fillCircle(seg.x + shadowOffset, seg.y + shadowOffset, radius);

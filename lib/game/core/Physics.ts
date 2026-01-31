@@ -17,6 +17,8 @@ export const PhysicsConfig = {
   FOOD_RADIUS: 10,
   FOOD_VALUE: 1,
   AOI_RADIUS: 800,
+  BASE_TURN_SPEED: Math.PI * 1.8, // Faster turning (was 1.5)
+  BASE_RADIUS: 21, // Starting visual radius
 };
 
 export let VisualConfig = {

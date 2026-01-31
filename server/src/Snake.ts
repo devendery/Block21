@@ -1,4 +1,4 @@
-import { Vector2, PhysicsConfig, normalize, angleDifference, checkCircleCollision } from './Physics';
+import { Vector2, PhysicsConfig, normalize, angleDifference, checkCircleCollision, clamp, rotateTowards, wrapAngle } from './Physics';
 import { Player, SnakeSegment } from './State';
 
 export class SnakeLogic {
@@ -18,6 +18,11 @@ export class SnakeLogic {
   // Direction Inertia (Golden Rule: Direction is persistent)
   private dirX: number = 1;
   private dirY: number = 0;
+  
+  private angularVelocity: number = 0;
+  
+  // Coiling Logic (Tight turns when spinning at one place)
+  private turnAccumulator: number = 0;
   
   // Stored Input for Physics Loop
   public lastInput: { vector: Vector2, boost: boolean } | null = null;
@@ -58,7 +63,9 @@ export class SnakeLogic {
   update(dt: number, input: { vector: Vector2, boost: boolean }) {
     if (!this.player.alive) return;
 
-    const inputVector = input.vector;
+    // 0. Update Dynamic Stats (Logarithmic Growth Model)
+    const mass = this.player.mass;
+    const length = this.player.length;
     
     // 0. Handle Boost Speed (Must have mass to boost)
     const canBoost = input.boost && this.internalSegments.length > 10;
@@ -69,6 +76,7 @@ export class SnakeLogic {
     const fixedDt = 1 / 60;
 
     // 1. Detect turning state
+    const inputVector = input.vector;
     const lenSq = inputVector.x * inputVector.x + inputVector.y * inputVector.y;
     const wasTurning = this.isTurning;
     this.isTurning = lenSq > 0.0001;
@@ -134,7 +142,7 @@ export class SnakeLogic {
   }
 
   grow(amount: number = 1) {
-    this.player.score += amount;
+    this.player.mass += amount;
     
     // Add segments
     for (let i = 0; i < amount; i++) {
@@ -171,7 +179,7 @@ export class SnakeLogic {
   }
 
   private checkWorldBoundary() {
-    const r = PhysicsConfig.COLLISION_RADIUS;
+    const r = this.player.radius; // Use dynamic radius
     const limit = PhysicsConfig.MAP_SIZE / 2;
     
     // Rectangular Boundary (Worms Zone style)

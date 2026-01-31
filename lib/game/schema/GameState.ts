@@ -35,6 +35,7 @@ if (g.__COLYSEUS_SCHEMA_CACHE__) {
     @type("number") score: number = 0;
     @type("number") speed: number = 0;
     @type("number") length: number = 0;
+    @type("number") radius: number = 21;
     
     // Physics State (Not synced, but used for logic)
     dirX: number = 1;

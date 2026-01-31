@@ -14,6 +14,8 @@ export const PhysicsConfig = {
   COLLISION_RADIUS: 10, // Chunky hitbox
   INTERPOLATION_DELAY: 150, // ms
   MAP_SIZE: 6000, // Large world
+  BASE_TURN_SPEED: Math.PI * 1.8, // Faster turning (was 1.5)
+  BASE_RADIUS: 21, // Starting visual radius
   FOOD_RADIUS: 10,
   FOOD_VALUE: 1,
   AOI_RADIUS: 800,
@@ -52,10 +54,26 @@ export function lerp(start: number, end: number, t: number): number {
   return start * (1 - t) + end * t;
 }
 
+export function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 // Shortest angle difference
 export function angleDifference(current: number, target: number): number {
   let diff = target - current;
   while (diff < -Math.PI) diff += Math.PI * 2;
   while (diff > Math.PI) diff -= Math.PI * 2;
   return diff;
+}
+
+export function wrapAngle(angle: number): number {
+  while (angle < -Math.PI) angle += Math.PI * 2;
+  while (angle > Math.PI) angle -= Math.PI * 2;
+  return angle;
+}
+
+export function rotateTowards(current: number, target: number, maxStep: number): number {
+  const diff = angleDifference(current, target);
+  if (Math.abs(diff) < maxStep) return target;
+  return wrapAngle(current + Math.sign(diff) * maxStep);
 }

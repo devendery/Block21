@@ -501,8 +501,18 @@ private playDeathExplosion(x: number, y: number) {
 
   if (this.mySessionId && this.snakeRenderers.has(this.mySessionId)) {
     const renderer = this.snakeRenderers.get(this.mySessionId)!;
-    this.localSnakeProxy.x = renderer.displayX;
-    this.localSnakeProxy.y = renderer.displayY;
+    const player = this.room.state.players.get(this.mySessionId);
+    
+    if (player) {
+      // Look-ahead logic
+      const lookAhead = 40;
+      const targetX = renderer.displayX + Math.cos(renderer.displayAngle) * lookAhead;
+      const targetY = renderer.displayY + Math.sin(renderer.displayAngle) * lookAhead;
+      
+      // Lerp the proxy for smooth camera follow
+      this.localSnakeProxy.x = Phaser.Math.Linear(this.localSnakeProxy.x, targetX, 0.12);
+      this.localSnakeProxy.y = Phaser.Math.Linear(this.localSnakeProxy.y, targetY, 0.12);
+    }
   }
 
   // 5. Render food (Emoji Style)
