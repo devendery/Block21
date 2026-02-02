@@ -85,7 +85,7 @@ export const PHYSICS_CONSTANTS: PhysicsConstants = {
   // Doubled snake size
   BASE_RADIUS: 6,
   MAX_RADIUS: 24,
-  RADIUS_SCALE_FACTOR: 0.01,
+  RADIUS_SCALE_FACTOR: 0.1,
   RADIUS_CAP_SEGMENTS: 2000,
 
   FOOD_RADIUS: 12,

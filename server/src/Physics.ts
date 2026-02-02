@@ -99,10 +99,15 @@ export function wrapAngle(angle: number): number {
 }
 
 // Worms Zone Radius Scaling Formula
-export function calculateSnakeRadius(segmentCount: number): number {
+export function calculateSnakeRadius(mass: number): number {
   const { BASE_RADIUS, MAX_RADIUS, RADIUS_SCALE_FACTOR } = PhysicsConfig;
-  const scaledRadius = BASE_RADIUS + segmentCount * RADIUS_SCALE_FACTOR;
-  return Math.min(MAX_RADIUS, Math.max(BASE_RADIUS, scaledRadius));
+  console.log(`DEBUG: calculateSnakeRadius() - mass: ${mass}, BASE_RADIUS: ${BASE_RADIUS}, RADIUS_SCALE_FACTOR: ${RADIUS_SCALE_FACTOR}`);
+  
+  const scaledRadius = BASE_RADIUS + mass * RADIUS_SCALE_FACTOR;
+  const result = Math.min(MAX_RADIUS, Math.max(BASE_RADIUS, scaledRadius));
+  
+  console.log(`DEBUG: calculateSnakeRadius() - scaled: ${scaledRadius}, result: ${result}`);
+  return result;
 }
 
 // Calculate LOD level based on distance

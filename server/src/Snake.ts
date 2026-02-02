@@ -29,15 +29,21 @@ export class SnakeLogic {
   private dirX: number = 1;
   private dirY: number = 0;
   
+  // Room reference for dynamic boundary
+  private room?: any;
+  
   // Boost tracking
   private boostStartTime: number = 0;
   private isBoosting: boolean = false;
   private accumulatedBoostTime: number = 0;
   public lastInput: { vector: Vector2, boost: boolean } | null = null;
 
-  constructor(player: Player) {
+  constructor(player: Player, room?: any) {
     this.player = player;
     this.player.speed = PhysicsConfig.BASE_SPEED;
+    
+    // Store room reference for dynamic boundary calculations
+    this.room = room;
     
     this.dirX = Math.cos(player.angle);
     this.dirY = Math.sin(player.angle);
@@ -143,6 +149,9 @@ export class SnakeLogic {
     this.player.x += this.dirX * moveDist;
     this.player.y += this.dirY * moveDist;
 
+    // Boundary collision detection
+    this.checkBoundaryCollision();
+
     // Add to head history
     this.headHistory.unshift({ 
       x: this.player.x, 
@@ -190,7 +199,14 @@ export class SnakeLogic {
   }
 
   private updatePlayerRadius() {
-    this.player.radius = calculateSnakeRadius(this.virtualSegmentCount);
+    const oldRadius = this.player.radius;
+    const calculatedRadius = calculateSnakeRadius(this.player.mass);
+    console.log(`DEBUG: updatePlayerRadius() - mass: ${this.player.mass}, calculated: ${calculatedRadius}, old: ${oldRadius}`);
+    
+    this.player.radius = calculatedRadius;
+    if (this.player.radius !== oldRadius) {
+      console.log(`Snake ${this.player.name} radius changed: ${oldRadius} -> ${this.player.radius} (mass: ${this.player.mass})`);
+    }
   }
   
   private updateBoundingRadius() {
@@ -228,7 +244,7 @@ export class SnakeLogic {
       if (this.controlPoints[targetIndex]) {
         const cp = this.controlPoints[targetIndex];
         const segmentRadius = calculateSnakeRadius(
-          Math.floor(this.virtualSegmentCount * t)
+          Math.floor(this.player.mass * (1 - t)) // Mass decreases towards tail
         );
         
         this.simplifiedCollisionSegments.push({
@@ -242,7 +258,7 @@ export class SnakeLogic {
     // Always include tail (last control point or estimated)
     if (this.controlPoints.length > 0) {
       const lastCp = this.controlPoints[this.controlPoints.length - 1];
-      const tailRadius = calculateSnakeRadius(this.virtualSegmentCount);
+      const tailRadius = calculateSnakeRadius(this.player.mass);
       
       this.simplifiedCollisionSegments.push({
         x: lastCp.x,
@@ -255,7 +271,9 @@ export class SnakeLogic {
   }
 
   grow(amount: number = 1) {
+    const oldMass = this.player.mass;
     this.player.mass += amount;
+    console.log(`DEBUG: grow() - amount: ${amount}, old mass: ${oldMass}, new mass: ${this.player.mass}`);
     const addSegments = Math.max(0, Math.floor(amount));
     if (addSegments === 0) return;
     this.virtualSegmentCount += addSegments;
@@ -346,17 +364,81 @@ export class SnakeLogic {
     }
   }
 
+  private checkBoundaryCollision() {
+    // DYNAMIC BOUNDARY: Scale with average player size
+    const averageMass = this.calculateAveragePlayerMass();
+    const dynamicBoundary = this.calculateDynamicBoundary(averageMass);
+    
+    const boundaryMargin = this.player.boundingRadius || this.player.radius * 2;
+    
+    // Check if snake is outside dynamic boundaries with margin
+    if (Math.abs(this.player.x) > dynamicBoundary - boundaryMargin) {
+      // Bounce off X boundary
+      this.player.x = Math.sign(this.player.x) * (dynamicBoundary - boundaryMargin);
+      
+      // Reverse X direction for bounce effect
+      this.dirX = -this.dirX;
+      this.player.angle = Math.atan2(this.dirY, this.dirX);
+      
+      // Small penalty for hitting boundary
+      this.player.mass = Math.max(0, this.player.mass - 10);
+      this.updatePlayerRadius();
+    }
+    
+    if (Math.abs(this.player.y) > dynamicBoundary - boundaryMargin) {
+      // Bounce off Y boundary
+      this.player.y = Math.sign(this.player.y) * (dynamicBoundary - boundaryMargin);
+      
+      // Reverse Y direction for bounce effect
+      this.dirY = -this.dirY;
+      this.player.angle = Math.atan2(this.dirY, this.dirX);
+      
+      // Small penalty for hitting boundary
+      this.player.mass = Math.max(0, this.player.mass - 10);
+      this.updatePlayerRadius();
+    }
+  }
+
+  private calculateAveragePlayerMass(): number {
+    if (!this.room) return this.player.mass;
+    
+    // Get all players from the room state
+    const allPlayers = Array.from(this.room.state.players.values());
+    if (allPlayers.length === 0) return this.player.mass;
+    
+    const totalMass = allPlayers.reduce((sum: number, p: any) => sum + p.mass, 0);
+    return totalMass / allPlayers.length;
+  }
+
+  private calculateDynamicBoundary(averageMass: number): number {
+    // DEVELOPMENT: Start with very small boundary (1000 units)
+    const DEV_BASE_BOUNDARY = 1000;
+    const BASE_BOUNDARY = PhysicsConfig.UNIVERSE_LIMIT;
+    const MAX_BOUNDARY = BASE_BOUNDARY * 3; // Maximum 3x expansion
+    
+    // Scale boundary based on average mass (more mass = larger world)
+    const massScale = Math.min(3, 1 + (averageMass / 500)); // Faster scaling for development
+    const dynamicBoundary = DEV_BASE_BOUNDARY * massScale;
+    
+    return Math.min(MAX_BOUNDARY, Math.max(DEV_BASE_BOUNDARY, dynamicBoundary));
+  }
+
   respawn() {
     this.player.alive = true;
     this.player.x = (Math.random() - 0.5) * SERVER_CONSTANTS.PLAYER_SPAWN_RANGE;
     this.player.y = (Math.random() - 0.5) * SERVER_CONSTANTS.PLAYER_SPAWN_RANGE;
-    this.player.angle = Math.random() * Math.PI * 2;
+    this.player.angle = -Math.PI / 2;
+    this.dirX = Math.cos(this.player.angle);
+    this.dirY = Math.sin(this.player.angle);
     this.player.mass = 0;
     this.player.score = 0;
     this.player.isBoosting = false;
+    this.player.speed = PhysicsConfig.BASE_SPEED;
     
     // Reset to minimal snake
+    this.lastInput = null;
     this.virtualSegmentCount = SERVER_CONSTANTS.SNAKE_INITIAL_SEGMENTS;
+    this.player.length = this.virtualSegmentCount;
     this.controlPoints = [{
       x: this.player.x,
       y: this.player.y,
@@ -367,10 +449,7 @@ export class SnakeLogic {
     this.headHistory = [];
     this.isBoosting = false;
     this.accumulatedBoostTime = 0;
-    
-    this.dirX = Math.cos(this.player.angle);
-    this.dirY = Math.sin(this.player.angle);
-    
+    this.player.segments.clear();
     this.initSegments();
   }
 }

@@ -99,9 +99,9 @@ export function wrapAngle(angle: number): number {
 }
 
 // Worms Zone Radius Scaling Formula
-export function calculateSnakeRadius(segmentCount: number): number {
+export function calculateSnakeRadius(mass: number): number {
   const { BASE_RADIUS, MAX_RADIUS, RADIUS_SCALE_FACTOR } = PhysicsConfig;
-  const scaledRadius = BASE_RADIUS + segmentCount * RADIUS_SCALE_FACTOR;
+  const scaledRadius = BASE_RADIUS + mass * RADIUS_SCALE_FACTOR;
   return Math.min(MAX_RADIUS, Math.max(BASE_RADIUS, scaledRadius));
 }
 

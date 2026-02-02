@@ -6,6 +6,7 @@ import { Server, Room, Client } from "colyseus";
 import { StateView, Encoder } from "@colyseus/schema";
 import { GameState, Player, SnakeSegment, Food } from "./State";
 import { SnakeLogic } from "./Snake";
+import { AISnakeController } from "./AISnakeController";
 import { PhysicsConfig, checkCircleCollision, calculateSnakeRadius } from "./Physics";
 import { CollisionSystem } from "./CollisionSystem";
 import { PersistenceSystem } from "./PersistenceSystem";
@@ -61,6 +62,7 @@ class SpatialGrid {
 class Block21Room extends Room<GameState> {
   // Game Loop
   snakes: Map<string, SnakeLogic> = new Map();
+  private aiSnakes: Map<string, AISnakeController> = new Map(); // AI snake controllers
   private collisionSystem!: CollisionSystem;
   private persistenceSystem!: PersistenceSystem;
   private clientViews: Map<string, StateView> = new Map();
@@ -115,7 +117,9 @@ class Block21Room extends Room<GameState> {
     // INFINITE MAP: Spawn anywhere (no boundaries)
     player.x = (Math.random() - 0.5) * SERVER_CONSTANTS.PLAYER_SPAWN_RANGE;
     player.y = (Math.random() - 0.5) * SERVER_CONSTANTS.PLAYER_SPAWN_RANGE;
-    player.angle = Math.random() * Math.PI * 2;
+   // player.angle = Math.random() * Math.PI * 2;
+   // Line 114: Change from Math.random() * Math.PI * 2 to Math.PI / 2
+    player.angle = Math.PI / 2; // Snake starts facing UP
     player.name = options.name || "Anonymous";
     player.radius = PhysicsConfig.BASE_RADIUS;
     
@@ -125,7 +129,7 @@ class Block21Room extends Room<GameState> {
     this.state.players.set(client.sessionId, player);
 
     // Initialize Physics Logic for this player
-    const snakeLogic = new SnakeLogic(player);
+    const snakeLogic = new SnakeLogic(player, this);
     snakeLogic.initSegments();
     this.snakes.set(client.sessionId, snakeLogic);
     this.collisionSystem.registerSnakeLogic(client.sessionId, snakeLogic);
@@ -153,6 +157,9 @@ class Block21Room extends Room<GameState> {
       message: "Welcome to Worms Zone Unlimited!",
       features: ["infinite_map", "unlimited_growth", "persistent_progress"]
     });
+
+    // Spawn AI snakes (1 player = 20 AI snakes)
+    this.spawnAISnakes();
   }
 
   onLeave (client: Client, consented: boolean) {
@@ -172,6 +179,9 @@ class Block21Room extends Room<GameState> {
     this.snakes.delete(client.sessionId);
     this.clientViews.delete(client.sessionId);
     this.clientAOI.delete(client.sessionId);
+    
+    // Clean up AI snakes when player leaves
+    this.removeAllAISnakes();
   }
 
   onDispose() {
@@ -208,7 +218,16 @@ class Block21Room extends Room<GameState> {
       }
     });
 
-    
+    // Update AI snakes
+    this.aiSnakes.forEach((aiController, aiId) => {
+      const snake = this.snakes.get(aiId);
+      if (!snake || !snake.player.alive) return;
+      
+      // Get AI decision and update the snake
+      const aiInput = aiController.update(dt);
+      snake.update(dt, aiInput);
+    });
+
     // Update collision system
     this.collisionSystem.update();
 
@@ -322,24 +341,88 @@ class Block21Room extends Room<GameState> {
   spawnFood() {
     const food = new Food();
     
-    // INFINITE MAP: Spawn anywhere, but prefer near players
+    // DYNAMIC BOUNDARY: Spawn only inside current boundary
+    const currentBoundary = this.calculateCurrentBoundary();
+    const boundaryMargin = currentBoundary * 0.9; // 90% of boundary to keep food away from edges
+    
     if (this.state.players.size > 0) {
       const players = Array.from(this.state.players.values());
       const randomPlayer = players[Math.floor(Math.random() * players.length)];
       const angle = Math.random() * Math.PI * 2;
       const distance = Math.random() * SERVER_CONSTANTS.FOOD_SPAWN_NEAR_PLAYER_RANGE;
+      
+      // Ensure food spawns inside boundary
       food.x = randomPlayer.x + Math.cos(angle) * distance;
       food.y = randomPlayer.y + Math.sin(angle) * distance;
+      
+      // Clamp to boundary
+      food.x = Math.max(-boundaryMargin, Math.min(boundaryMargin, food.x));
+      food.y = Math.max(-boundaryMargin, Math.min(boundaryMargin, food.y));
     } else {
-      // No players, spawn in reasonable area
-      food.x = (Math.random() - 0.5) * SERVER_CONSTANTS.FOOD_SPAWN_NO_PLAYER_RANGE;
-      food.y = (Math.random() - 0.5) * SERVER_CONSTANTS.FOOD_SPAWN_NO_PLAYER_RANGE;
+      // No players, spawn inside boundary
+      food.x = (Math.random() - 0.5) * boundaryMargin;
+      food.y = (Math.random() - 0.5) * boundaryMargin;
     }
     
     food.value = PhysicsConfig.FOOD_VALUE;
     const id = Math.random().toString(36).substr(2, SERVER_CONSTANTS.FOOD_ID_LENGTH);
     this.state.food.set(id, food);
     this.foodGrid.insert(id, food.x, food.y);
+  }
+
+  private spawnAISnakes() {
+    // Remove any existing AI snakes first
+    this.removeAllAISnakes();
+    
+    // Spawn 20 AI snakes for 1 player
+    const aiSnakeCount = 20;
+    
+    for (let i = 0; i < aiSnakeCount; i++) {
+      this.spawnSingleAISnake(i);
+    }
+    
+    console.log(`Spawned ${aiSnakeCount} AI snakes`);
+  }
+
+  private spawnSingleAISnake(index: number) {
+    // Create AI player state
+    const player = new Player();
+    player.id = `ai_${index}_${Date.now()}`;
+    
+    // Spawn AI snake in reasonable range
+    player.x = (Math.random() - 0.5) * SERVER_CONSTANTS.PLAYER_SPAWN_RANGE;
+    player.y = (Math.random() - 0.5) * SERVER_CONSTANTS.PLAYER_SPAWN_RANGE;
+    player.angle = -Math.PI / 2; // Face UP like player snakes
+    player.name = `AI_${Math.floor(Math.random() * 1000)}`;
+    player.radius = PhysicsConfig.BASE_RADIUS;
+    player.skin = Math.floor(Math.random() * SERVER_CONSTANTS.SKIN_COUNT);
+    
+    // Add to game state
+    this.state.players.set(player.id, player);
+    
+    // Initialize snake logic
+    const snakeLogic = new SnakeLogic(player, this);
+    snakeLogic.initSegments();
+    
+    // Create AI controller
+    const aiController = new AISnakeController(snakeLogic);
+    
+    // Register with collision system
+    this.collisionSystem.registerSnakeLogic(player.id, snakeLogic);
+    
+    // Store references
+    this.snakes.set(player.id, snakeLogic);
+    this.aiSnakes.set(player.id, aiController);
+  }
+
+  private removeAllAISnakes() {
+    // Remove all AI snakes from the game
+    for (const [aiId, aiController] of this.aiSnakes) {
+      this.state.players.delete(aiId);
+      this.snakes.delete(aiId);
+      this.collisionSystem.unregisterSnakeLogic(aiId);
+    }
+    this.aiSnakes.clear();
   }
 
   convertSnakeToFood(playerId: string) {
@@ -369,6 +452,26 @@ class Block21Room extends Room<GameState> {
       this.state.food.set(id, food);
       this.foodGrid.insert(id, food.x, food.y);
     }
+  }
+
+  private calculateCurrentBoundary(): number {
+    // Calculate average player mass for dynamic boundary
+    const allPlayers = Array.from(this.state.players.values());
+    if (allPlayers.length === 0) return 1000; // Default boundary
+    
+    const totalMass = allPlayers.reduce((sum: number, p: any) => sum + p.mass, 0);
+    const averageMass = totalMass / allPlayers.length;
+    
+    // DEVELOPMENT: Start with very small boundary (1000 units)
+    const DEV_BASE_BOUNDARY = 1000;
+    const BASE_BOUNDARY = PhysicsConfig.UNIVERSE_LIMIT;
+    const MAX_BOUNDARY = BASE_BOUNDARY * 3; // Maximum 3x expansion
+    
+    // Scale boundary based on average mass (more mass = larger world)
+    const massScale = Math.min(3, 1 + (averageMass / 500)); // Faster scaling for development
+    const dynamicBoundary = DEV_BASE_BOUNDARY * massScale;
+    
+    return Math.min(MAX_BOUNDARY, Math.max(DEV_BASE_BOUNDARY, dynamicBoundary));
   }
 }
 

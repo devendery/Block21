@@ -23,6 +23,7 @@ export class MainScene extends Phaser.Scene {
   private leaderboardTexts: Phaser.GameObjects.Text[] = [];
   private minimapGraphics!: Phaser.GameObjects.Graphics;
   private minimapBorder!: Phaser.GameObjects.Graphics;
+  private boundaryGraphics!: Phaser.GameObjects.Graphics;
   private foodTexts: Map<string, Phaser.GameObjects.Text> = new Map();
 
   // Camera proxy (authoritative from STATE)
@@ -173,25 +174,21 @@ preload() {
   }
 
   createUI() {
-    // 1. Leaderboard (Top Left)
+    // 1. Leaderboard (Top Left) - FIXED: No background, direct text on screen
     this.leaderboardContainer = this.add.container(20, 20).setScrollFactor(0).setDepth(1000);
-    const lbBg = this.add.graphics();
-    lbBg.fillStyle(0x000000, 0.5);
-    lbBg.fillRoundedRect(-10, -10, 220, 280, 10);
-    this.leaderboardContainer.add(lbBg);
-
+    
     const title = this.add.text(0, 0, "TOP PLAYERS", {
        fontSize: "18px",
        fontStyle: "bold",
        color: "#ffcc00"
-     });
+     }).setScrollFactor(0);
     this.leaderboardContainer.add(title);
 
     for (let i = 0; i < 10; i++) {
       const txt = this.add.text(0, 30 + i * 22, "", {
         fontSize: "14px",
         color: "#ffffff"
-      });
+      }).setScrollFactor(0);
       this.leaderboardTexts.push(txt);
       this.leaderboardContainer.add(txt);
     }
@@ -207,6 +204,10 @@ preload() {
     this.minimapBorder.strokeRect(x, y, mapSize, mapSize);
     this.minimapBorder.fillStyle(0x000000, 0.3);
     this.minimapBorder.fillRect(x, y, mapSize, mapSize);
+
+    // 3. Boundary Visualization (Visible Play Area)
+    this.boundaryGraphics = this.add.graphics().setDepth(500);
+    this.updateBoundaryVisualization(1000); // Initial boundary
 
     this.minimapGraphics = this.add.graphics().setScrollFactor(0).setDepth(1001);
   }
@@ -612,5 +613,25 @@ private updateMinimap() {
     }
   });
 }
+
+  // Update boundary visualization based on current boundary size
+  updateBoundaryVisualization(boundarySize: number) {
+    this.boundaryGraphics.clear();
+    
+    // Draw boundary as a red rectangle
+    this.boundaryGraphics.lineStyle(3, 0xff0000, 0.7); // Red border with transparency
+    this.boundaryGraphics.strokeRect(-boundarySize, -boundarySize, boundarySize * 2, boundarySize * 2);
+    
+    // Add subtle grid inside boundary for better visibility
+    this.boundaryGraphics.lineStyle(1, 0xff6666, 0.3);
+    const gridSize = boundarySize / 5;
+    for (let i = -boundarySize; i <= boundarySize; i += gridSize) {
+      this.boundaryGraphics.moveTo(i, -boundarySize);
+      this.boundaryGraphics.lineTo(i, boundarySize);
+      this.boundaryGraphics.moveTo(-boundarySize, i);
+      this.boundaryGraphics.lineTo(boundarySize, i);
+    }
+    this.boundaryGraphics.strokePath();
+  }
 
 }

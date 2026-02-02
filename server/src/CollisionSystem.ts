@@ -294,17 +294,17 @@ export class CollisionSystem {
     
     if (bodySegments.length === 0) return false;
     
-    // Logarithmic sampling: Check fewer segments for longer snakes
-    const sampleCount = Math.min(20, Math.max(3, Math.ceil(bodySegments.length / 50)));
-    const step = Math.max(1, Math.floor(bodySegments.length / sampleCount));
-    
-    for (let i = 0; i < bodySegments.length; i += step) {
+    // PINPOINT ACCURACY: Check every segment with continuous collision detection
+    for (let i = 0; i < bodySegments.length; i++) {
       const segment = bodySegments[i];
       const dx = headSnake.player.x - segment.x;
       const dy = headSnake.player.y - segment.y;
       const minDistance = headRadius + segment.radius;
       
-      if (dx * dx + dy * dy < minDistance * minDistance) {
+      // FAIRNESS: Add 5% tolerance to prevent unfair deaths from side touches
+      const collisionThreshold = minDistance * minDistance * 0.95;
+      
+      if (dx * dx + dy * dy < collisionThreshold) {
         return true;
       }
     }
@@ -316,18 +316,21 @@ export class CollisionSystem {
     const headRadius = snakeLogic.player.radius;
     const segments = snakeLogic.getSegmentsForCollision();
     
-    if (segments.length < 10) return false;
+    if (segments.length < 15) return false; // Prevent early self-collision
     
-    // Only check segments after index 10 (skip head and neck)
-    const startIndex = Math.min(10, Math.floor(segments.length * 0.2));
+    // PINPOINT ACCURACY: Check every segment after neck (index 15+)
+    const startIndex = Math.max(15, Math.floor(segments.length * 0.25));
     
-    for (let i = startIndex; i < segments.length; i += 3) { // Check every 3rd segment
+    for (let i = startIndex; i < segments.length; i++) {
       const segment = segments[i];
       const dx = snakeLogic.player.x - segment.x;
       const dy = snakeLogic.player.y - segment.y;
       const minDistance = headRadius + segment.radius;
       
-      if (dx * dx + dy * dy < minDistance * minDistance * 0.8) {
+      // FAIRNESS: 10% tolerance for self-collision
+      const collisionThreshold = minDistance * minDistance * 0.9;
+      
+      if (dx * dx + dy * dy < collisionThreshold) {
         return true;
       }
     }
