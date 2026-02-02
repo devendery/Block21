@@ -1,4 +1,4 @@
-export { SnakeSegment, PathPoint, Food, Player, GameState } from "../../shared/schemas/GameState";
+export { SnakeSegment, PathPoint, Food, Player, GameState } from "../../../shared/schemas/GameState";
 
 
 // export class GameState extends Schema {

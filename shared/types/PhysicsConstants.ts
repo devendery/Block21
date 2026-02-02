@@ -1,0 +1,119 @@
+export interface PhysicsConstants {
+  BASE_SPEED: number;
+  BOOST_SPEED: number;
+  TURN_SPEED_DEGREES: number;
+  BASE_TURN_SPEED: number;
+
+  BASE_RADIUS: number;
+  MAX_RADIUS: number;
+  RADIUS_SCALE_FACTOR: number;
+  RADIUS_CAP_SEGMENTS: number;
+
+  FOOD_RADIUS: number;
+  FOOD_VALUE: number;
+
+  CHUNK_SIZE: number;
+  RENDER_DISTANCE: number;
+  UNIVERSE_LIMIT: number;
+
+  AOI_RADIUS: number;
+
+  BOOST_DRAIN_RATE: number;
+  BOOST_DRAIN_FRAMES: number;
+
+  SEGMENT_DISTANCE: number;
+  SEGMENT_LERP_MIN: number;
+  SEGMENT_LERP_MAX: number;
+  COLLISION_RADIUS: number;
+  INTERPOLATION_DELAY: number;
+
+  RENDER_RADIUS: number;
+  TAIL_TAPER_START: number;
+  TAIL_MIN_SCALE: number;
+
+  LOD_DISTANCE_NEAR: number;
+  LOD_DISTANCE_MEDIUM: number;
+  LOD_DISTANCE_FAR: number;
+  LOD_DISTANCE_VISIBLE: number;
+}
+
+// export const PHYSICS_CONSTANTS: PhysicsConstants = {
+//   BASE_SPEED: 78,
+//   BOOST_SPEED: 195,
+//   TURN_SPEED_DEGREES: 7,
+//   BASE_TURN_SPEED: Math.PI * 1.8,
+
+//   BASE_RADIUS: 4,
+//   MAX_RADIUS: 10,
+//   RADIUS_SCALE_FACTOR: 0.001,
+//   RADIUS_CAP_SEGMENTS: 6000,
+
+//   FOOD_RADIUS: 10,
+//   FOOD_VALUE: 1,
+
+//   CHUNK_SIZE: 10000,
+//   RENDER_DISTANCE: 1500,
+//   UNIVERSE_LIMIT: 1000000,
+
+//   AOI_RADIUS: 800,
+
+//   BOOST_DRAIN_RATE: 0.8,
+//   BOOST_DRAIN_FRAMES: 75,
+
+//   SEGMENT_DISTANCE: 8,
+//   SEGMENT_LERP_MIN: 0.2,
+//   SEGMENT_LERP_MAX: 0.3,
+//   COLLISION_RADIUS: 10,
+//   INTERPOLATION_DELAY: 150,
+
+//   RENDER_RADIUS: 24,
+//   TAIL_TAPER_START: 0.9,
+//   TAIL_MIN_SCALE: 0.5,
+
+//   LOD_DISTANCE_NEAR: 500,
+//   LOD_DISTANCE_MEDIUM: 1500,
+//   LOD_DISTANCE_FAR: 3000,
+//   LOD_DISTANCE_VISIBLE: 5000,
+// } as const;
+export const PHYSICS_CONSTANTS: PhysicsConstants = {
+  // Keep speeds similar but adjust for larger size
+  BASE_SPEED: 78,
+  BOOST_SPEED: 195,
+  TURN_SPEED_DEGREES: 5.5,
+  BASE_TURN_SPEED: Math.PI * 1.6,
+
+  // Doubled snake size
+  BASE_RADIUS: 6,
+  MAX_RADIUS: 24,
+  RADIUS_SCALE_FACTOR: 0.01,
+  RADIUS_CAP_SEGMENTS: 2000,
+
+  FOOD_RADIUS: 12,
+  FOOD_VALUE: 2,
+
+  CHUNK_SIZE: 10000,
+  RENDER_DISTANCE: 1500,
+  UNIVERSE_LIMIT: 1000000,
+
+  AOI_RADIUS: 1000,
+
+  BOOST_DRAIN_RATE: 0.1,
+  BOOST_DRAIN_FRAMES: 75,
+
+  // Adjusted for larger size
+  SEGMENT_DISTANCE: 12,
+  SEGMENT_LERP_MIN: 0.15,
+  SEGMENT_LERP_MAX: 0.25,
+  COLLISION_RADIUS: 15,
+  INTERPOLATION_DELAY: 150,
+
+  // Larger visual appearance
+  RENDER_RADIUS: 36,
+  TAIL_TAPER_START: 0.95,
+  TAIL_MIN_SCALE: 0.6,
+
+  LOD_DISTANCE_NEAR: 500,
+  LOD_DISTANCE_MEDIUM: 1500,
+  LOD_DISTANCE_FAR: 3000,
+  LOD_DISTANCE_VISIBLE: 5000,
+} as const;

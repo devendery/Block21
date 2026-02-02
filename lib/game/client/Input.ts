@@ -1,5 +1,5 @@
 import { Vector2, normalize } from '../core/Physics';
-import { Snake } from '../core/Snake';
+import { SnakeLogic as Snake } from '../core/Snake';
 
 export class InputManager {
   private scene: Phaser.Scene;
