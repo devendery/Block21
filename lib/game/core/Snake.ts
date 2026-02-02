@@ -1,68 +1,107 @@
-import { Vector2, PhysicsConfig, normalize, angleDifference, checkCircleCollision } from './Physics';
+// server/src/Snake.ts
+import { Vector2, PhysicsConfig, normalize, angleDifference, checkCircleCollision, clamp, rotateTowards, wrapAngle, calculateSnakeRadius, calculateBoostDrain } from './Physics';
+import { Player, SnakeSegment } from './State';
 
-export class SnakeSegment {
-  x: number;
-  y: number;
-  prevX: number;  // Store previous position for teleport detection
-  prevY: number;
-  
-  constructor(x: number, y: number) {
-    this.x = x;
-    this.y = y;
-    this.prevX = x;
-    this.prevY = y;
-  }
-  
-  updatePosition(newX: number, newY: number) {
-    this.prevX = this.x;
-    this.prevY = this.y;
-    this.x = newX;
-    this.y = newY;
-  }
-}
-
-export class Snake {
-  id: string;
-  x: number;
-  y: number;
-  angle: number;
-  speed: number;
-  segments: SnakeSegment[];
-  
-  private dirX: number = 1;
-  private dirY: number = 0;
+export class SnakeLogic {
+  player: Player;
+  private internalSegments: { 
+    x: number; y: number; 
+    prevX: number; prevY: number;
+    radius: number; // ADDED: Store segment radius for collision
+  }[] = [];
+  private segmentSyncCounter: number = 0;
+  private readonly SEGMENT_SYNC_EVERY = 4;
+  private headHistory: { x: number; y: number }[] = [];
+  private lastHistoryX: number = 0;
+  private lastHistoryY: number = 0;
   private isTurning: boolean = false;
   private turnStartTime: number = 0;
+  
+  // Direction Inertia (Golden Rule: Direction is persistent)
+  private dirX: number = 1;
+  private dirY: number = 0;
+  
+  private angularVelocity: number = 0;
+  
+  // Coiling Logic (Tight turns when spinning at one place)
+  private turnAccumulator: number = 0;
+  
+  // Stored Input for Physics Loop
+  public lastInput: { vector: Vector2, boost: boolean } | null = null;
+  
+  // Boost tracking
+  private boostStartTime: number = 0;
+  private isBoosting: boolean = false;
+  private accumulatedBoostTime: number = 0;
 
-  alive: boolean = true;
-  history: Vector2[];
+  constructor(player: Player) {
+    this.player = player;
+    this.player.speed = PhysicsConfig.BASE_SPEED;
+    
+    // Initialize Physics State
+    this.dirX = Math.cos(player.angle);
+    this.dirY = Math.sin(player.angle);
 
-  constructor(id: string, x: number, y: number) {
-    this.id = id;
-    this.x = x;
-    this.y = y;
-    this.angle = 0;
-    this.speed = PhysicsConfig.BASE_SPEED;
-    this.segments = [];
-    this.history = [];
+    this.lastHistoryX = player.x;
+    this.lastHistoryY = player.y;
+  }
 
-    // Initialize segments with proper spacing
-    for (let i = 0; i < 20; i++) {
-      const segX = x - (i * PhysicsConfig.SEGMENT_DISTANCE);
-      this.segments.push(new SnakeSegment(segX, y));
-      this.history.push({ x: segX, y });
+  initSegments() {
+    // Initialize segments if empty
+    if (this.internalSegments.length === 0) {
+        const startSize = 10; // Worms Zone: 10 initial segments
+        for (let i = 0; i < startSize; i++) {
+            const backOffset = (i + 1) * PhysicsConfig.SEGMENT_DISTANCE;
+            const segX = this.player.x - (backOffset * this.dirX);
+            const segY = this.player.y - (backOffset * this.dirY);
+            const segmentRadius = calculateSnakeRadius(i + 1);
+            
+            this.internalSegments.push({ 
+              x: segX, y: segY, 
+              prevX: segX, prevY: segY,
+              radius: segmentRadius // Store radius
+            });
+            const seg = new SnakeSegment();
+            seg.x = segX;
+            seg.y = segY;
+            this.player.segments.push(seg);
+        }
+        this.player.length = this.internalSegments.length;
+        this.updatePlayerRadius();
     }
   }
 
   update(dt: number, input: { vector: Vector2, boost: boolean }) {
-    if (!this.alive) return;
-    
-    const inputVector = input.vector;
-    
-    // Handle boost
-    this.speed = input.boost ? PhysicsConfig.BOOST_SPEED : PhysicsConfig.BASE_SPEED;
+    if (!this.player.alive) return;
 
-    // Detect turning state
+    // 0. Update Dynamic Stats
+    const mass = this.player.mass;
+    const length = this.player.length;
+    
+    // 0. Handle Boost Speed and Mass Drain
+    const canBoost = input.boost && this.internalSegments.length > 10;
+    
+    if (canBoost && !this.isBoosting) {
+      this.boostStartTime = Date.now();
+      this.isBoosting = true;
+    } else if (!canBoost && this.isBoosting) {
+      this.isBoosting = false;
+      this.applyBoostMassDrain();
+    }
+    
+    this.player.isBoosting = canBoost;
+    this.player.speed = canBoost ? PhysicsConfig.BOOST_SPEED : PhysicsConfig.BASE_SPEED;
+    
+    // Track boost time for mass drain
+    if (this.isBoosting) {
+      this.accumulatedBoostTime += dt;
+    }
+    
+    // Fixed Time Step for Consistent Physics (60Hz)
+    const fixedDt = 1 / 60;
+
+    // 1. Detect turning state
+    const inputVector = input.vector;
     const lenSq = inputVector.x * inputVector.x + inputVector.y * inputVector.y;
     const wasTurning = this.isTurning;
     this.isTurning = lenSq > 0.0001;
@@ -71,13 +110,22 @@ export class Snake {
       this.turnStartTime = Date.now();
     }
     
+    // 2. Validate Input (Ignore weak/zero input)
+    // GOLDEN RULE: If no input, keep last direction.
+    
     // Only turn if input is significant
     if (lenSq > 0.0001) {
+        // Calculate Target Angle from Input
         const targetAngle = Math.atan2(inputVector.y, inputVector.x);
-        const currentAngle = Math.atan2(this.dirY, this.dirX);
-        const diff = angleDifference(currentAngle, targetAngle);
-        const maxTurn = PhysicsConfig.BASE_TURN_SPEED * dt;
         
+        // Calculate Current Angle from Direction
+        const currentAngle = Math.atan2(this.dirY, this.dirX);
+        
+        // Rotate towards Target
+        const diff = angleDifference(currentAngle, targetAngle);
+        const maxTurn = PhysicsConfig.TURN_SPEED * fixedDt;
+        
+        // Apply rotation (clamped)
         let newAngle = currentAngle;
         if (Math.abs(diff) < maxTurn) {
             newAngle = targetAngle;
@@ -85,122 +133,235 @@ export class Snake {
             newAngle += Math.sign(diff) * maxTurn;
         }
         
+        // Update Direction
         this.dirX = Math.cos(newAngle);
         this.dirY = Math.sin(newAngle);
-        this.angle = newAngle;
+        
+        // Update Angle (for client interpolation/rendering if needed)
+        this.player.angle = newAngle;
     }
     
-    // Move forward
-    const moveDist = this.speed * dt;
-    this.x += this.dirX * moveDist;
-    this.y += this.dirY * moveDist;
+    // 3. Move Forward (Fixed Time Step for Consistent Speed)
+    const moveDist = this.player.speed * fixedDt;
+    this.player.x += this.dirX * moveDist;
+    this.player.y += this.dirY * moveDist;
 
-    // Add to history
-    this.history.unshift({ x: this.x, y: this.y });
+    // 4. ---- Update head position history ----
+    this.headHistory.unshift({ x: this.player.x, y: this.player.y });
     
-    // Keep history size reasonable
-    const maxHistoryNeeded = this.segments.length * 4 + 10;
-    if (this.history.length > maxHistoryNeeded) {
-      this.history.pop();
+    // Trim history to required length (ensure enough for smooth turns)
+    const maxHistory = Math.max(this.internalSegments.length * 15 + 30, 100); // Minimum 100 frames buffer
+    if (this.headHistory.length > maxHistory) {
+      this.headHistory.length = maxHistory;
     }
-
-    // Update body segments
+    
+    // 5. Update Body Segments (Constraint Solving)
     this.updateSegments();
 
-    // Check collisions
-    this.checkSelfCollision();
-    this.checkWorldBoundary();
+    // 6. Update player radius based on segment count
+    this.updatePlayerRadius();
+
+    // 7. NO WORLD BOUNDARY CHECK - INFINITE MAP
+    // Removed: this.checkWorldBoundary();
   }
 
-  private checkWorldBoundary() {
-    const r = PhysicsConfig.COLLISION_RADIUS;
-    const limit = PhysicsConfig.MAP_SIZE / 2;
-    const distSq = this.x * this.x + this.y * this.y;
-    const maxDist = limit - r;
-    
-    if (distSq > maxDist * maxDist) {
-        this.alive = false;
+  // Apply boost mass drain when boost ends
+  private applyBoostMassDrain() {
+    if (this.accumulatedBoostTime > 0) {
+      const segmentsToDrain = calculateBoostDrain(this.accumulatedBoostTime);
+      for (let i = 0; i < segmentsToDrain && this.internalSegments.length > 10; i++) {
+        this.shrink(1);
+      }
+      this.accumulatedBoostTime = 0;
     }
   }
 
-  private checkSelfCollision() {
-    const safeZone = 5;
-    
-    for (let i = safeZone; i < this.segments.length; i++) {
-        const seg = this.segments[i];
-        if (checkCircleCollision(this.x, this.y, PhysicsConfig.COLLISION_RADIUS, 
-                                 seg.x, seg.y, PhysicsConfig.COLLISION_RADIUS)) {
-            this.alive = false;
-            return;
-        }
-    }
+  // Update player radius based on segment count
+  private updatePlayerRadius() {
+    this.player.radius = calculateSnakeRadius(this.internalSegments.length);
   }
 
-   private updateSegments() {
-  if (this.segments.length === 0 || this.history.length < 2) return;
-  
-  // Method: Walk along the history path, placing segments at fixed distances
-  
-  // Start from head position
-  let currentX = this.x;
-  let currentY = this.y;
-  let historyIndex = 0;
-  let accumulatedDistance = 0;
-  
-  // Clear history beyond what we need (performance)
-  const maxHistoryNeeded = this.segments.length * 3 + 10;
-  if (this.history.length > maxHistoryNeeded) {
-    this.history.splice(maxHistoryNeeded);
-  }
-  
-  for (let i = 0; i < this.segments.length; i++) {
-    const segment = this.segments[i];
-    const targetDistance = PhysicsConfig.SEGMENT_DISTANCE * (i + 1);
+  grow(amount: number = 1) {
+    this.player.mass += amount;
     
-    // Walk along history until we reach targetDistance from head
-    while (historyIndex < this.history.length - 1 && accumulatedDistance < targetDistance) {
-      const p1 = this.history[historyIndex];
-      const p2 = this.history[historyIndex + 1];
-      
-      const segmentDX = p2.x - p1.x;
-      const segmentDY = p2.y - p1.y;
-      const segmentLength = Math.sqrt(segmentDX * segmentDX + segmentDY * segmentDY);
-      
-      // If adding this segment would exceed target, interpolate
-      if (accumulatedDistance + segmentLength >= targetDistance) {
-        const remaining = targetDistance - accumulatedDistance;
-        const ratio = remaining / segmentLength;
+    // Add segments
+    for (let i = 0; i < amount; i++) {
+        const lastSeg = (this.internalSegments.length > 0 ? 
+          this.internalSegments[this.internalSegments.length - 1] : 
+          { x: this.player.x, y: this.player.y }) as { x: number, y: number };
         
-        currentX = p1.x + segmentDX * ratio;
-        currentY = p1.y + segmentDY * ratio;
-        accumulatedDistance = targetDistance;
-        break;
-      } else {
-        accumulatedDistance += segmentLength;
-        historyIndex++;
-        currentX = p2.x;
-        currentY = p2.y;
+        const segmentRadius = calculateSnakeRadius(this.internalSegments.length + 1);
+        
+        this.internalSegments.push({ 
+          x: lastSeg.x, y: lastSeg.y, 
+          prevX: lastSeg.x, prevY: lastSeg.y,
+          radius: segmentRadius
+        });
+        const newSeg = new SnakeSegment();
+        newSeg.x = lastSeg.x;
+        newSeg.y = lastSeg.y;
+        this.player.segments.push(newSeg);
+    }
+    this.player.length = this.internalSegments.length;
+    this.updatePlayerRadius();
+  }
+
+  shrink(amount: number = 1): {x: number, y: number} | null {
+      if (this.internalSegments.length <= 10) return null;
+
+      this.player.score = Math.max(0, this.player.score - amount);
+      
+      const removed = this.internalSegments.pop();
+      if (this.player.segments.length > this.internalSegments.length) {
+        this.player.segments.pop();
+      }
+      this.player.length = this.internalSegments.length;
+      this.updatePlayerRadius();
+      
+      return removed ? { x: removed.x, y: removed.y } : null;
+  }
+
+  getSegmentsForCollision() {
+    return this.internalSegments;
+  }
+
+  // Get segments optimized for LOD
+  getSegmentsForLOD(distance: number): {x: number, y: number, radius: number}[] {
+    const totalSegments = this.internalSegments.length;
+    
+    // Determine LOD based on distance and segment count
+    let step = 1;
+    if (distance > 1000 || totalSegments > 500) step = 2;
+    if (distance > 2000 || totalSegments > 2000) step = 3;
+    if (distance > 5000 || totalSegments > 10000) step = 5;
+    if (totalSegments > 50000) step = 10;
+    
+    // Return sampled segments
+    const result = [];
+    for (let i = 0; i < totalSegments; i += step) {
+      const seg = this.internalSegments[i];
+      result.push({ x: seg.x, y: seg.y, radius: seg.radius });
+    }
+    
+    // Always include head and tail
+    if (totalSegments > 0) {
+      const head = this.internalSegments[0];
+      const tail = this.internalSegments[totalSegments - 1];
+      if (step > 1) {
+        result.unshift({ x: head.x, y: head.y, radius: head.radius });
+        result.push({ x: tail.x, y: tail.y, radius: tail.radius });
       }
     }
     
-    // Anti-teleport: Smooth movement instead of snapping
-    const dx = currentX - segment.x;
-    const dy = currentY - segment.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    return result;
+  }
+
+  // INFINITE MAP: No boundary checks
+  // private checkWorldBoundary() { REMOVED }
+
+  private updateSegments() {
+    const len = this.internalSegments.length;
+    if (len === 0) return;
     
-    const maxJump = PhysicsConfig.SEGMENT_DISTANCE * 2;
-    if (distance > maxJump) {
-      // Teleport detected! Move gradually
-      const angle = Math.atan2(dy, dx);
-      const moveAmount = Math.min(distance, maxJump * 0.5);
-      segment.x += Math.cos(angle) * moveAmount;
-      segment.y += Math.sin(angle) * moveAmount;
+    // Worms Zone Style: PERFECT HISTORY BUFFER FOLLOWING
+    // Each segment occupies the exact previous position of the segment ahead
+    
+    // First, update all segments to follow the exact path of the segment ahead
+    for (let i = len - 1; i > 0; i--) {
+      const cur = this.internalSegments[i];
+      const ahead = this.internalSegments[i - 1];
+      
+      // Store current position as previous for next frame
+      cur.prevX = cur.x;
+      cur.prevY = cur.y;
+      
+      // Move to the exact previous position of the segment ahead
+      cur.x = ahead.prevX;
+      cur.y = ahead.prevY;
+      
+      // Update segment radius based on position in snake
+      cur.radius = calculateSnakeRadius(i + 1);
+    }
+    
+    // Handle first segment (follows head's history buffer)
+    const firstSeg = this.internalSegments[0];
+    firstSeg.prevX = firstSeg.x;
+    firstSeg.prevY = firstSeg.y;
+    
+    // First segment follows head's history with fixed offset
+    const bufferIndex = Math.min(this.headHistory.length - 1, 15); // Fixed 15 frame delay for first segment
+    
+    if (bufferIndex >= 0 && bufferIndex < this.headHistory.length) {
+      const targetPos = this.headHistory[bufferIndex];
+      firstSeg.x = targetPos.x;
+      firstSeg.y = targetPos.y;
     } else {
-      // Normal smooth movement
-      const lerpFactor = 0.3; // Adjust this for smoothness
-      segment.x += dx * lerpFactor;
-      segment.y += dy * lerpFactor;
+      // Fallback: follow head directly
+      const dx = this.player.x - firstSeg.x;
+      const dy = this.player.y - firstSeg.y;
+      const distance = Math.hypot(dx, dy);
+      
+      if (distance > PhysicsConfig.SEGMENT_DISTANCE * 1.5) {
+        const angle = Math.atan2(dy, dx);
+        firstSeg.x += Math.cos(angle) * PhysicsConfig.SEGMENT_DISTANCE * 1.2;
+        firstSeg.y += Math.sin(angle) * PhysicsConfig.SEGMENT_DISTANCE * 1.2;
+      } else {
+        const relax = 0.25;
+        firstSeg.x += (this.player.x - firstSeg.x) * relax;
+        firstSeg.y += (this.player.y - firstSeg.y) * relax;
+      }
+    }
+    
+    // Update first segment radius
+    firstSeg.radius = calculateSnakeRadius(1);
+
+    this.segmentSyncCounter++;
+    
+    if (this.segmentSyncCounter % this.SEGMENT_SYNC_EVERY === 0) {
+      while (this.player.segments.length < this.internalSegments.length) {
+        const seg = new SnakeSegment();
+        this.player.segments.push(seg);
+      }
+      while (this.player.segments.length > this.internalSegments.length) {
+        this.player.segments.pop();
+      }
+      for (let i = 0; i < this.internalSegments.length; i++) {
+        const src = this.internalSegments[i];
+        const dst = this.player.segments[i];
+        if (!dst) continue;
+        dst.x = src.x;
+        dst.y = src.y;
+      }
     }
   }
-}
+
+  // Respawn method for death handling
+  respawn() {
+    this.player.alive = true;
+    // INFINITE MAP: Spawn anywhere in reasonable range
+    this.player.x = (Math.random() - 0.5) * 20000;
+    this.player.y = (Math.random() - 0.5) * 20000;
+    this.player.angle = Math.random() * Math.PI * 2;
+    this.player.mass = 0;
+    this.player.score = 0;
+    this.player.isBoosting = false;
+    
+    // Reset segments
+    this.internalSegments = [];
+    this.player.segments.clear();
+    this.initSegments();
+    
+    // Reset direction
+    this.dirX = Math.cos(this.player.angle);
+    this.dirY = Math.sin(this.player.angle);
+    
+    // Clear history
+    this.headHistory = [];
+    this.lastHistoryX = this.player.x;
+    this.lastHistoryY = this.player.y;
+    
+    // Reset boost
+    this.isBoosting = false;
+    this.accumulatedBoostTime = 0;
+  }
 }

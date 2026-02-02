@@ -90,6 +90,7 @@ class GameRuntimeInstance {
 
     const room = this.room;
     const baseGrid = 18;
+    const onStatsCallback = this.opts.onStats; // Store callback for use in MainScene
 
     class MainScene extends Phaser.Scene {
       sprites!: Phaser.GameObjects.Graphics;
@@ -106,8 +107,16 @@ class GameRuntimeInstance {
           relaxAllowed: boolean;
           history: { x: number; y: number }[];
           frozenHistory: { x: number; y: number }[];
+          radius: number;
+          skin: number;
         }
       >();
+
+      // Worms Zone radius calculation
+      private calculateSnakeRadius(segmentCount: number): number {
+        const scaledRadius = segmentCount * 0.001;
+        return Math.min(10, Math.max(4, scaledRadius));
+      }
 
       create() {
         this.sprites = this.add.graphics();
@@ -133,10 +142,15 @@ class GameRuntimeInstance {
               relaxAllowed: true,
               history: [],
               frozenHistory: [],
+              radius: this.calculateSnakeRadius(p.length || 0),
+              skin: p.skin || 0,
             };
             for (let i = 0; i < 400; i++) v.history.push({ x: p.x, y: p.y });
             this.visuals.set(id, v);
           }
+
+          v.radius = this.calculateSnakeRadius(p.length || 0);
+          v.skin = p.skin || 0;
 
           /* ---- HEAD INTERPOLATION ONLY ---- */
           v.x += (p.x - v.x) * 0.18;
@@ -181,7 +195,10 @@ class GameRuntimeInstance {
           }
 
           /* ---- DRAW ---- */
-          for (let i = 1; i < Math.min(p.length, 120); i++) {
+          const skinData = SKIN_PALETTES[SKIN_OPTIONS[v.skin % SKIN_OPTIONS.length] || "classic"];
+          const renderStep = Math.max(1, Math.floor(v.radius));
+          
+          for (let i = 1; i < Math.min(p.length, 500); i += renderStep) {
             const targetDist = i * 14;
             let historyIndex = 0;
             let traveled = 0;
@@ -195,8 +212,25 @@ class GameRuntimeInstance {
                 const ratio = segLen > 0 ? remain / segLen : 0;
                 const px = p1.x + (p2.x - p1.x) * ratio;
                 const py = p1.y + (p2.y - p1.y) * ratio;
-                this.sprites.fillStyle(0x525252, 1);
-                this.sprites.fillCircle(px * baseGrid, py * baseGrid, baseGrid * 0.45);
+                
+                const t = i / Math.min(p.length, 500);
+                const taperStart = 0.9;
+                let taperT = (t - taperStart) / (1 - taperStart);
+                taperT = Math.min(1, Math.max(0, taperT));
+                const scale = 1 - taperT * 0.5;
+                
+                const segmentRadius = v.radius * scale * baseGrid * 0.45;
+                
+                const isStripe = Math.floor(i / 2) % 2 === 0;
+                const fillColor = isStripe ? skinData.primary : skinData.secondary;
+                
+                this.sprites.fillStyle(fillColor, 1);
+                this.sprites.fillCircle(px * baseGrid, py * baseGrid, segmentRadius);
+                
+                if (segmentRadius > 3) {
+                  this.sprites.lineStyle(1, skinData.outline, 0.8);
+                  this.sprites.strokeCircle(px * baseGrid, py * baseGrid, segmentRadius);
+                }
                 break;
               }
               traveled += segLen;
@@ -204,10 +238,82 @@ class GameRuntimeInstance {
             }
           }
 
+          const headRadius = v.radius * baseGrid * 0.45;
+          const headX = v.x * baseGrid;
+          const headY = v.y * baseGrid;
+          
+          this.sprites.fillStyle(skinData.primary, 1);
+          this.sprites.fillCircle(headX, headY, headRadius);
+          this.sprites.lineStyle(2, skinData.outline, 1);
+          this.sprites.strokeCircle(headX, headY, headRadius);
+          
+          const eyeRadius = headRadius * 0.35;
+          const eyeOffsetX = headRadius * 0.4;
+          const eyeOffsetY = headRadius * 0.35;
+          
+          const leftEyeX = headX + eyeOffsetX * Math.cos(v.angle) - (-eyeOffsetY) * Math.sin(v.angle);
+          const leftEyeY = headY + eyeOffsetX * Math.sin(v.angle) + (-eyeOffsetY) * Math.cos(v.angle);
+          
+          const rightEyeX = headX + eyeOffsetX * Math.cos(v.angle) - (eyeOffsetY) * Math.sin(v.angle);
+          const rightEyeY = headY + eyeOffsetX * Math.sin(v.angle) + (eyeOffsetY) * Math.cos(v.angle);
+          
+          this.sprites.fillStyle(skinData.eye, 1);
+          this.sprites.fillCircle(leftEyeX, leftEyeY, eyeRadius);
+          this.sprites.fillCircle(rightEyeX, rightEyeY, eyeRadius);
+          
+          const pupilRadius = eyeRadius * 0.5;
+          const pupilOffset = eyeRadius * 0.2;
+          
+          const pupilLX = leftEyeX + pupilOffset * Math.cos(v.angle);
+          const pupilLY = leftEyeY + pupilOffset * Math.sin(v.angle);
+          const pupilRX = rightEyeX + pupilOffset * Math.cos(v.angle);
+          const pupilRY = rightEyeY + pupilOffset * Math.sin(v.angle);
+          
+          this.sprites.fillStyle(skinData.pupil, 1);
+          this.sprites.fillCircle(pupilLX, pupilLY, pupilRadius);
+          this.sprites.fillCircle(pupilRX, pupilRY, pupilRadius);
+          
+          const earRadius = headRadius * 0.2;
+          const earOffset = headRadius * 0.8;
+          
+          const leftEarX = headX + earOffset * Math.cos(v.angle - Math.PI/2);
+          const leftEarY = headY + earOffset * Math.sin(v.angle - Math.PI/2);
+          const rightEarX = headX + earOffset * Math.cos(v.angle + Math.PI/2);
+          const rightEarY = headY + earOffset * Math.sin(v.angle + Math.PI/2);
+          
+          this.sprites.fillStyle(skinData.primary, 1);
+          this.sprites.fillCircle(leftEarX, leftEarY, earRadius);
+          this.sprites.fillCircle(rightEarX, rightEarY, earRadius);
+          
+          const mouthRadius = headRadius * 0.15;
+          const mouthOffset = headRadius * 0.6;
+          const mouthX = headX + mouthOffset * Math.cos(v.angle);
+          const mouthY = headY + mouthOffset * Math.sin(v.angle);
+          
+          this.sprites.fillStyle(skinData.tongue, 1);
+          this.sprites.fillCircle(mouthX, mouthY, mouthRadius);
+
           if (id === room.sessionId) {
             this.dummyCam.setPosition(v.x * baseGrid, v.y * baseGrid);
+            
+            if (onStatsCallback) {
+              onStatsCallback({
+                score: p.score || 0,
+                mass: p.mass || 0,
+                length: p.length || 0,
+                radius: v.radius,
+                alive: p.alive !== false
+              });
+            }
           }
         });
+        
+        if (room.state.foods) {
+          room.state.foods.forEach((food: any) => {
+            this.sprites.fillStyle(0xff6b6b, 1);
+            this.sprites.fillCircle(food.x * baseGrid, food.y * baseGrid, 3);
+          });
+        }
       }
     }
 

@@ -62,7 +62,8 @@ private ZOOM_LERP = 0.04;
     
     // Update VisualConfig with scaled render radius
     // We need to modify the imported object directly
-    VisualConfig.RENDER_RADIUS = VisualConfig.BASE_RENDER_RADIUS * this.currentViewportScale;
+    
+    VisualConfig.RENDER_RADIUS = VisualConfig.RENDER_RADIUS * this.currentViewportScale;
     
     console.log(`Viewport scaling updated: ${this.currentViewportScale.toFixed(2)}x (${viewportWidth}x${viewportHeight})`);
   }
@@ -158,10 +159,12 @@ preload() {
     this.grid.setDepth(-1);
 
     // World Border
-    const border = this.add.graphics();
-    border.setDepth(0);
-    border.lineStyle(15, 0xffffff, 0.2); // Soft white border
-    border.strokeCircle(0, 0, PhysicsConfig.MAP_SIZE / 2);
+    //const border = this.add.graphics();
+    //border.setDepth(0);
+    //border.lineStyle(15, 0xffffff, 0.2); // Soft white border
+    // With this (INFINITE MAP - no border):
+    // border.strokeCircle(0, 0, PhysicsConfig.MAP_SIZE / 2); // REMOVE or comment out
+    // border.strokeCircle(0, 0, PhysicsConfig.MAP_SIZE / 2);
 
     this.debugText = this.add.text(
       10, 10, 'Phase 3: Multiplayer',
@@ -250,35 +253,22 @@ private updateCameraZoom() {
     const player = this.room.state.players.get(this.mySessionId);
     if (!player) return;
 
-    // Use segments OR score
-    const size = player.segments?.length ?? 10;
+    const realLength = (player.length ?? 10) || 10;
 
-    // Worms Zone Style Zoom
-    // Base zoom starts high (0.9) and decreases slowly as you grow.
-    // Logarithmic falloff prevents it from becoming a tiny dot too quickly.
-    // 500 segments (start) -> ~0.6
-    // 5000 segments -> ~0.3
-    
-    // Formula: Base - (Size * Factor)
-    // Let's use a gentle curve.
-    // 500 * 0.0004 = 0.2. 1.0 - 0.2 = 0.8.
-    // 5000 * 0.0004 = 2.0. Too much.
-    
-    // Let's use 1 / (1 + size * k)
-    // size 500 -> 1 / (1 + 0.5) = 0.66
-    // size 5000 -> 1 / (1 + 5) = 0.16 (Too small)
-    
-    // Custom Curve:
-    // Max Zoom (Small snake): 0.9
-    // Min Zoom (Giant snake): 0.3
-    
-    const progress = Math.min(size / 10000, 1); // 0 to 1 scaling up to 10k length
-    const targetZoom = Phaser.Math.Linear(0.9, 0.35, Math.sqrt(progress));
+    let targetZoom = 1.0;
+    if (realLength < 50) {
+      targetZoom = 1.0 - (realLength / 50) * 0.2;
+    } else if (realLength < 200) {
+      targetZoom = 0.8 - ((realLength - 50) / 150) * 0.3;
+    } else if (realLength < 1000) {
+      targetZoom = 0.5 - ((realLength - 200) / 800) * 0.2;
+    } else {
+      targetZoom = Math.max(0.2, 0.3 - ((realLength - 1000) / 5000) * 0.1);
+    }
 
     const cam = this.cameras.main;
-    cam.setZoom(
-      Phaser.Math.Linear(cam.zoom, targetZoom, this.ZOOM_LERP)
-    );
+    const newZoom = Phaser.Math.Linear(cam.zoom, targetZoom, this.ZOOM_LERP);
+    cam.setZoom(Phaser.Math.Clamp(newZoom, 0.15, 1.2));
   }
 
 
@@ -593,8 +583,10 @@ private updateMinimap() {
 
   this.minimapGraphics.clear();
   
-  const worldSize = PhysicsConfig.MAP_SIZE;
+  // With this (use a fixed large world size for minimap):
+  const worldSize = 30000; // Fixed large world for minimap scaling
   const scale = mapSize / worldSize;
+
 
   // Draw border circle on minimap
   this.minimapGraphics.lineStyle(1, 0xffffff, 0.2);

@@ -1,8 +1,12 @@
+// client/src/SnakeRenderer.ts
 import * as Phaser from 'phaser';
-import { PhysicsConfig, VisualConfig } from '../core/Physics';
+import { PhysicsConfig, VisualConfig, calculateLODLevel } from '../core/Physics';
 import { Player, SnakeSegment } from './ClientState';
 
-export interface ISnakeState {
+interface IPlayerWithRadius extends Player {
+  radius: number;
+}
+export interface ISnakeState  {
     x: number;
     y: number;
     angle: number;
@@ -15,10 +19,10 @@ export class SnakeRenderer {
   private scene: Phaser.Scene;
   private headGraphics: Phaser.GameObjects.Graphics;
   private bodyGraphics: Phaser.GameObjects.Graphics;
-  private snake: Player; // Use actual schema type
+  private snake: Player;
   private isLocal: boolean;
   private predictedPose: { x: number; y: number; angle: number } | null = null;
-  
+
   // Visual polish: Shadow
   private shadowGraphics: Phaser.GameObjects.Graphics;
 
@@ -36,12 +40,16 @@ export class SnakeRenderer {
 
   // LIFO / Hybrid Controller
   private relaxFrontIndex: number = 0;
-  private readonly RELAX_SPEED = 2.5; // Speed at which the "straightness" propagates back
-  private readonly TURN_LOCK_THRESHOLD = 0.40; // Turn intensity to stop relaxing (Increased to prevent accidental resets)
+  private readonly RELAX_SPEED = 2.5;
+  private readonly TURN_LOCK_THRESHOLD = 0.40;
   private readonly TURN_UNLOCK_THRESHOLD = 0.15;
   private relaxPaused: boolean = false;
 
   private displaySegments: { x: number, y: number }[] = [];
+
+  private effectiveLength: number = 10;
+  private maxVisualSegments: number = 400;
+  private visualSpacing: number = PhysicsConfig.SEGMENT_DISTANCE;
 
   private snapshotBuffer: { t: number; x: number; y: number; angle: number }[] = [];
   private readonly INTERPOLATION_DELAY_MS = 150;
@@ -50,16 +58,21 @@ export class SnakeRenderer {
   private lastBufferedY = NaN;
   private lastBufferedAngle = NaN;
 
+  // LOD System
+  private currentLODLevel: number = 0;
+  private lastDistanceCheck: number = 0;
+  private readonly DISTANCE_CHECK_INTERVAL = 1000; // ms
+
+  // Performance tracking
+  private renderCount: number = 0;
+  private lastRenderTime: number = 0;
+
   private resetHistoryFromHead(x: number, y: number, angle: number) {
     this.history = [];
-    // Simulate frame-by-frame history density (~3.6 units/frame)
-    // instead of segment-by-segment density (14 units)
-    // to ensure consistent behavior for sampling.
     const stepsPerSegment = PhysicsConfig.SEGMENT_DISTANCE / (PhysicsConfig.BASE_SPEED / 60); 
     const stepDist = PhysicsConfig.BASE_SPEED / 60;
     
-    // We need enough history to cover 500 segments
-    const totalPoints = Math.ceil(500 * stepsPerSegment) + 200; // Buffer
+    const totalPoints = Math.ceil(500 * stepsPerSegment) + 200;
 
     const backX = -Math.cos(angle);
     const backY = -Math.sin(angle);
@@ -126,10 +139,103 @@ export class SnakeRenderer {
     };
   }
 
-  constructor(scene: Phaser.Scene, snake: Player, isLocal: boolean) { // Use actual schema type
+  // Calculate distance from camera
+  private calculateDistanceFromCamera(): number {
+    if (!this.scene.cameras.main) return 0;
+    
+    const cameraX = this.scene.cameras.main.scrollX + this.scene.cameras.main.width / 2;
+    const cameraY = this.scene.cameras.main.scrollY + this.scene.cameras.main.height / 2;
+    
+    return Phaser.Math.Distance.Between(
+      this.displayX, this.displayY,
+      cameraX, cameraY
+    );
+  }
+
+  // Update LOD level based on distance and snake size
+  private updateLODLevel() {
+    const now = Date.now();
+    if (now - this.lastDistanceCheck < this.DISTANCE_CHECK_INTERVAL) {
+      return;
+    }
+    
+    this.lastDistanceCheck = now;
+    const distance = this.calculateDistanceFromCamera();
+    const segmentCount = this.effectiveLength;
+    
+    // Base LOD from distance
+    let lod = calculateLODLevel(distance, segmentCount);
+    
+    // Adjust LOD based on snake size
+    if (segmentCount > 10000) lod = Math.max(lod, 2);
+    if (segmentCount > 50000) lod = Math.max(lod, 3);
+    if (segmentCount > 100000) lod = Math.max(lod, 4);
+    
+    this.currentLODLevel = lod;
+  }
+
+  // Get render step based on LOD
+  // In SnakeRenderer.ts, change the getRenderStep() method:
+private getRenderStep(): number {
+  // Use type assertion
+  const player = this.snake as any;
+  const baseRadius = player.radius || 4;
+  const baseStep = Math.max(1, Math.floor(baseRadius));
+  const lengthFactor = Math.min(3, this.effectiveLength / 1000);
+  
+  switch (this.currentLODLevel) {
+    case 0: // Full detail
+      return Math.max(1, Math.floor(baseStep * (1 + lengthFactor * 0.5)));
+    case 1: // Medium detail
+      return Math.max(1, Math.floor(baseStep * 2 * (1 + lengthFactor)));
+    case 2: // Low detail
+      return Math.max(1, Math.floor(baseStep * 3 * (1 + lengthFactor * 1.5)));
+    case 3: // Very low detail
+      return Math.max(1, Math.floor(baseStep * 5 * (1 + lengthFactor * 2)));
+    case 4: // Minimal detail
+      return Math.max(1, Math.floor(baseStep * 10 * (1 + lengthFactor * 3)));
+    default:
+      return baseStep;
+  }
+}
+  // Get segments to render based on LOD
+  private getSegmentsToRender(): {x: number, y: number}[] {
+    const totalSegments = this.displaySegments.length;
+    const renderStep = this.getRenderStep();
+    
+    // If LOD is high or snake is short, render all segments
+    if (this.currentLODLevel === 0 || totalSegments < 100) {
+      return this.displaySegments;
+    }
+    
+    // Sample segments based on LOD
+    const segments: {x: number, y: number}[] = [];
+    
+    // Always include head
+    if (totalSegments > 0) {
+      segments.push({ x: this.displayX, y: this.displayY });
+    }
+    
+    // Sample body segments
+    for (let i = 0; i < totalSegments; i += renderStep) {
+      if (i > 0) { // Skip head (already added)
+        segments.push(this.displaySegments[i]);
+      }
+    }
+    
+    // Always include tail
+    if (totalSegments > 1 && renderStep > 1) {
+      segments.push(this.displaySegments[totalSegments - 1]);
+    }
+    
+    return segments;
+  }
+
+  constructor(scene: Phaser.Scene, snake: Player, isLocal: boolean) {
     this.scene = scene;
     this.snake = snake;
     this.isLocal = isLocal;
+    this.snake = snake as IPlayerWithRadius;
 
     // Initialize display state
     this.displayX = snake.x;
@@ -156,71 +262,75 @@ export class SnakeRenderer {
   setPredictedPose(pose: { x: number; y: number; angle: number } | null) {
     this.predictedPose = pose;
   }
-update() {
-  try {
-    if (!this.snake.alive) {
-      this.clear();
-      return;
-    }
 
-    const now = (this.scene as any).time?.now ?? performance.now();
-    this.bufferSnapshot(now);
+  update() {
+    try {
+      if (!this.snake.alive) {
+        this.clear();
+        return;
+      }
 
-    const t = 0.1;
-    const TURN_INTERPOLATION = 0.15;
-
-    const localTarget = this.predictedPose ?? { x: this.snake.x, y: this.snake.y, angle: this.snake.angle };
-    const target = this.isLocal ? localTarget : this.getInterpolatedTarget(now);
-
-    // ==================================================
-    // 0. SNAP / TELEPORT PROTECTION
-    // ==================================================
-    const snapDist = Phaser.Math.Distance.Between(
-      this.displayX,
-      this.displayY,
-      target.x,
-      target.y
-    );
-
-    // Reduced threshold to 300 for smoother movement
-    // Soft correction: If between 100-300, lerp faster (t=0.3)
-    // Emergency correction: If > 300, use aggressive catch-up with history reset
-    if (snapDist > 300) {
-      // Aggressive but smooth catch-up (prevents teleporting)
-      // Use the same interpolation method as normal for consistency
-      const catchupSpeed = 0.5;
-      this.displayX = Phaser.Math.Linear(this.displayX, target.x, catchupSpeed);
-      this.displayY = Phaser.Math.Linear(this.displayY, target.y, catchupSpeed);
-      this.displayAngle = target.angle;
-      this.lastDisplayAngle = this.displayAngle;
-      this.lastAngleDelta = 0;
-      
-      // CRITICAL: Reset history to maintain visual continuity during large corrections
-      this.resetHistoryFromHead(this.displayX, this.displayY, this.displayAngle);
-    } else {
-      // ==================================================
-      // 1. HEAD-ONLY INTERPOLATION
-      // ==================================================
-      // Dynamic lerp: standard 0.1, but if drifting (>50), increase to 0.2 to catch up smoothly
-      // If boosting, we want tighter lerp (0.3) because speed is high
-      const isBoosting = this.snake.isBoosting;
-      const baseLerp = isBoosting ? 0.2 : 0.1;
-      const catchupLerp = isBoosting ? 0.4 : 0.25;
-      
-      const dynamicT = snapDist > 50 ? catchupLerp : baseLerp;
-      
-      // Always use smooth interpolation for all snakes (local and remote)
-      const remoteLerp = 0.2; // Smooth interpolation for remote snakes
-      this.displayX = Phaser.Math.Linear(this.displayX, target.x, this.isLocal ? dynamicT : remoteLerp);
-      this.displayY = Phaser.Math.Linear(this.displayY, target.y, this.isLocal ? dynamicT : remoteLerp);
-      this.displayAngle = Phaser.Math.Angle.RotateTo(
-        this.displayAngle,
-        target.angle,
-        this.isLocal ? TURN_INTERPOLATION : TURN_INTERPOLATION * 2 // Slower turn for remote
+      this.effectiveLength = Math.max(10, Math.floor((this.snake as any).length || 10));
+      const visualSegmentCount = Math.min(
+        this.maxVisualSegments,
+        Math.max(10, this.effectiveLength)
       );
-    }
+      this.visualSpacing = PhysicsConfig.SEGMENT_DISTANCE * (this.effectiveLength / visualSegmentCount);
 
-    // ==================================================
+      const now = (this.scene as any).time?.now ?? performance.now();
+      this.bufferSnapshot(now);
+
+      // Update LOD level
+      this.updateLODLevel();
+
+      const t = 0.1;
+      const TURN_INTERPOLATION = 0.15;
+
+      const localTarget = this.predictedPose ?? { x: this.snake.x, y: this.snake.y, angle: this.snake.angle };
+      const target = this.isLocal ? localTarget : this.getInterpolatedTarget(now);
+
+      // ==================================================
+      // 0. SNAP / TELEPORT PROTECTION
+      // ==================================================
+      const snapDist = Phaser.Math.Distance.Between(
+        this.displayX,
+        this.displayY,
+        target.x,
+        target.y
+      );
+
+      // INFINITE MAP: Increased threshold for smooth long-distance travel
+      if (snapDist > 500) { // Increased from 300 for infinite map
+        const catchupSpeed = 0.5;
+        this.displayX = Phaser.Math.Linear(this.displayX, target.x, catchupSpeed);
+        this.displayY = Phaser.Math.Linear(this.displayY, target.y, catchupSpeed);
+        this.displayAngle = target.angle;
+        this.lastDisplayAngle = this.displayAngle;
+        this.lastAngleDelta = 0;
+        
+        // Reset history during large corrections
+        this.resetHistoryFromHead(this.displayX, this.displayY, this.displayAngle);
+      } else {
+        // ==================================================
+        // 1. HEAD-ONLY INTERPOLATION
+        // ==================================================
+        const isBoosting = this.snake.isBoosting;
+        const baseLerp = isBoosting ? 0.2 : 0.1;
+        const catchupLerp = isBoosting ? 0.4 : 0.25;
+        
+        const dynamicT = snapDist > 50 ? catchupLerp : baseLerp;
+        
+        const remoteLerp = 0.2;
+        this.displayX = Phaser.Math.Linear(this.displayX, target.x, this.isLocal ? dynamicT : remoteLerp);
+        this.displayY = Phaser.Math.Linear(this.displayY, target.y, this.isLocal ? dynamicT : remoteLerp);
+        this.displayAngle = Phaser.Math.Angle.RotateTo(
+          this.displayAngle,
+          target.angle,
+          this.isLocal ? TURN_INTERPOLATION : TURN_INTERPOLATION * 2
+        );
+      }
+
+      // ==================================================
       // 2. TURN DETECTION (Visual Only)
       // ==================================================
       const angleDelta = Phaser.Math.Angle.Wrap(
@@ -229,7 +339,7 @@ update() {
       this.lastAngleDelta = angleDelta;
       this.lastDisplayAngle = this.displayAngle;
 
-      const turnIntensity = Math.abs(angleDelta) / 0.1; // Normalize
+      const turnIntensity = Math.abs(angleDelta) / 0.1;
 
       // LIFO Hysteresis
       if (turnIntensity > this.TURN_LOCK_THRESHOLD) {
@@ -239,126 +349,96 @@ update() {
       }
 
       if (this.relaxPaused) {
-        // When turning, we STOP relaxing.
-        // DECAY instead of instant reset to prevent snapping.
-        // This creates a "zipper" effect where the body locks to history smoothly.
-        this.relaxFrontIndex = Math.max(0, this.relaxFrontIndex - 8); 
+        this.relaxFrontIndex = Math.max(0, this.relaxFrontIndex - 8);
       } else {
-        // When straight, the "straightness" travels down the body
         this.relaxFrontIndex += this.RELAX_SPEED;
-        // Clamp to max length
-        this.relaxFrontIndex = Math.min(this.relaxFrontIndex, this.snake.segments.length);
+        this.relaxFrontIndex = Math.min(this.relaxFrontIndex, visualSegmentCount);
       }
 
       // ==================================================
       // 3. RECORD SACRED HISTORY (RAW HEAD PATH)
       // ==================================================
-    this.history.unshift({ x: this.displayX, y: this.displayY });
-    if (this.history.length > this.MAX_HISTORY) {
-      this.history.pop();
-    }
-
-    // ==================================================
-    // 4. SYNC SEGMENT COUNT (Worms Zone Style)
-    // ==================================================
-    while (this.displaySegments.length < this.snake.segments.length) {
-      // Add new segments at the tail position, not head position
-      const tailPos = this.displaySegments.length > 0 ? 
-        { ...this.displaySegments[this.displaySegments.length - 1] } : 
-        { x: this.displayX, y: this.displayY };
-      this.displaySegments.push({ x: tailPos.x, y: tailPos.y });
-    }
-    while (this.displaySegments.length > this.snake.segments.length) {
-      this.displaySegments.pop();
-    }
-
-    // ==================================================
-  // 5. Worms Zone Style: Pure Mathematical Interpolation
-  // ==================================================
-  const spacing = PhysicsConfig.SEGMENT_DISTANCE;
-  
-  // Worms Zone uses tighter spacing during turns to prevent teleporting
-  const turnTightness = Math.min(1, Math.abs(this.lastAngleDelta) / 0.15);
-  const dynamicSpacing = spacing * (1 - turnTightness * 0.3); // 30% tighter during sharp turns
-  
-  // Pure mathematical interpolation - no hybrid zones
-  for (let i = 0; i < this.displaySegments.length; i++) {
-    const targetPos = (i === 0) ? 
-      { x: this.displayX, y: this.displayY } : 
-      this.displaySegments[i - 1];
-    
-    const currentPos = this.displaySegments[i];
-    
-    // Calculate vector and distance
-    const dx = targetPos.x - currentPos.x;
-    const dy = targetPos.y - currentPos.y;
-    const distance = Math.hypot(dx, dy);
-    
-    if (distance > 0.001) {
-      // Worms Zone-style smooth interpolation with tighter spacing during turns
-      const targetDistance = dynamicSpacing;
-      
-      if (distance > targetDistance * 2.5) {
-        // Emergency catch-up: move directly toward target
-        const angle = Math.atan2(dy, dx);
-        currentPos.x += Math.cos(angle) * targetDistance * 1.8;
-        currentPos.y += Math.sin(angle) * targetDistance * 1.8;
-      } else if (distance > targetDistance * 1.2) {
-        // Fast interpolation for moderate gaps
-        const overshoot = distance - targetDistance;
-        currentPos.x += (dx / distance) * overshoot * 0.6;
-        currentPos.y += (dy / distance) * overshoot * 0.6;
-      } else {
-        // Smooth interpolation for normal movement
-        const lerpFactor = 0.15 + turnTightness * 0.1; // Faster interpolation during turns
-        currentPos.x += (targetPos.x - currentPos.x) * lerpFactor;
-        currentPos.y += (targetPos.y - currentPos.y) * lerpFactor;
+      this.history.unshift({ x: this.displayX, y: this.displayY });
+      if (this.history.length > this.MAX_HISTORY) {
+        this.history.pop();
       }
+
+      // ==================================================
+      // 4. SYNC SEGMENT COUNT
+      // ==================================================
+      while (this.displaySegments.length < visualSegmentCount) {
+        const tailPos = this.displaySegments.length > 0 ? 
+          { ...this.displaySegments[this.displaySegments.length - 1] } : 
+          { x: this.displayX, y: this.displayY };
+        this.displaySegments.push({ x: tailPos.x, y: tailPos.y });
+      }
+      while (this.displaySegments.length > visualSegmentCount) {
+        this.displaySegments.pop();
+      }
+
+      // ==================================================
+      // 5. Worms Zone Style: Pure Mathematical Interpolation
+      // ==================================================
+      const spacing = this.visualSpacing;
+      
+      const turnTightness = Math.min(1, Math.abs(this.lastAngleDelta) / 0.15);
+      const dynamicSpacing = spacing * (1 - turnTightness * 0.3);
+      
+      for (let i = 0; i < this.displaySegments.length; i++) {
+        const targetPos = (i === 0) ? 
+          { x: this.displayX, y: this.displayY } : 
+          this.displaySegments[i - 1];
+        
+        const currentPos = this.displaySegments[i];
+        
+        const dx = targetPos.x - currentPos.x;
+        const dy = targetPos.y - currentPos.y;
+        const distance = Math.hypot(dx, dy);
+        
+        if (distance > 0.001) {
+          const targetDistance = dynamicSpacing;
+          
+          if (distance > targetDistance * 2.5) {
+            const angle = Math.atan2(dy, dx);
+            currentPos.x += Math.cos(angle) * targetDistance * 1.8;
+            currentPos.y += Math.sin(angle) * targetDistance * 1.8;
+          } else if (distance > targetDistance * 1.2) {
+            const overshoot = distance - targetDistance;
+            currentPos.x += (dx / distance) * overshoot * 0.6;
+            currentPos.y += (dy / distance) * overshoot * 0.6;
+          } else {
+            const lerpFactor = 0.15 + turnTightness * 0.1;
+            currentPos.x += (targetPos.x - currentPos.x) * lerpFactor;
+            currentPos.y += (targetPos.y - currentPos.y) * lerpFactor;
+          }
+        }
+      }
+
+      // ==================================================
+      // 6. RENDER WITH LOD
+      // ==================================================
+      this.clear();
+      
+      // Skip rendering if too far (LOD level 3+)
+      if (this.currentLODLevel >= 3 && this.calculateDistanceFromCamera() > VisualConfig.LOD_DISTANCE_FAR) {
+        return;
+      }
+      
+      this.drawShadows();
+      this.drawBody();
+      this.drawHead();
+
+      // Performance tracking
+      this.renderCount++;
+      if (now - this.lastRenderTime > 1000) {
+        console.log(`Renderer FPS: ${this.renderCount}`);
+        this.renderCount = 0;
+        this.lastRenderTime = now;
+      }
+
+    } catch (e) {
+      console.error("SnakeRenderer Update Error:", e);
     }
-  }
-
-    // ==================================================
-    // 6. RENDER
-    // ==================================================
-    this.clear();
-    this.drawShadows();
-    this.drawBody();
-    this.drawHead();
-
-  } catch (e) {
-    console.error("SnakeRenderer Update Error:", e);
-  }
-}
-
-// DELETED: relaxHistory() - Pure path following does not use relaxation.
-
-
-  // Helper: Find intersection t (0..1) where segment p1->p2 intersects circle at center 'c' with radius 'r'
-  // Returns closest t to 0 (since we move forward from p1)
-  private intersectCircleLine(c: {x:number, y:number}, r: number, p1: {x:number, y:number}, p2: {x:number, y:number}): number | null {
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-    const fx = p1.x - c.x;
-    const fy = p1.y - c.y;
-
-    const A = dx * dx + dy * dy;
-    const B = 2 * (fx * dx + fy * dy);
-    const C = (fx * fx + fy * fy) - r * r;
-
-    let delta = B * B - 4 * A * C;
-
-    if (delta < 0) return null; // No intersection
-
-    delta = Math.sqrt(delta);
-
-    const t1 = (-B - delta) / (2 * A);
-    const t2 = (-B + delta) / (2 * A);
-
-    // We prefer the smallest positive t (closest to p1)
-    if (t1 >= 0 && t1 <= 1) return t1;
-    if (t2 >= 0 && t2 <= 1) return t2;
-
-    return null;
   }
 
   private clear() {
@@ -368,7 +448,9 @@ update() {
   }
 
   private drawHead() {
-    // Worms Zone Style: Round Head + Big Eyes
+    // Use dynamic radius from snake
+    const r = this.snake.radius || VisualConfig.RENDER_RADIUS;
+    
     const skinId = this.snake.skin || 0;
     const skin = SnakeRenderer.SKINS[skinId % SnakeRenderer.SKINS.length];
 
@@ -376,7 +458,6 @@ update() {
     const outlineColor = skin.outline; 
 
     // 1. Draw Round Head
-    const r = VisualConfig.RENDER_RADIUS;
     this.headGraphics.fillStyle(shellColor, 1);
     this.headGraphics.fillCircle(this.displayX, this.displayY, r);
     this.headGraphics.lineStyle(2, outlineColor, 1);
@@ -389,11 +470,9 @@ update() {
     const eyeRadius = r * 0.35;
     const eyeColor = 0xFFFFFF;
 
-    // Left Eye Position
     const leftEyeX = this.displayX + eyeOffsetX * Math.cos(angle) - (-eyeOffsetY) * Math.sin(angle);
     const leftEyeY = this.displayY + eyeOffsetX * Math.sin(angle) + (-eyeOffsetY) * Math.cos(angle);
     
-    // Right Eye Position
     const rightEyeX = this.displayX + eyeOffsetX * Math.cos(angle) - (eyeOffsetY) * Math.sin(angle);
     const rightEyeY = this.displayY + eyeOffsetX * Math.sin(angle) + (eyeOffsetY) * Math.cos(angle);
 
@@ -404,7 +483,7 @@ update() {
     // 3. Draw Pupils (Black)
     const pupilRadius = eyeRadius * 0.5;
     const pupilColor = 0x000000;
-    const pupilOffset = eyeRadius * 0.2; // Look forward slightly
+    const pupilOffset = eyeRadius * 0.2;
 
     const pupilLX = leftEyeX + pupilOffset * Math.cos(angle);
     const pupilLY = leftEyeY + pupilOffset * Math.sin(angle);
@@ -414,12 +493,35 @@ update() {
     this.headGraphics.fillStyle(pupilColor, 1);
     this.headGraphics.fillCircle(pupilLX, pupilLY, pupilRadius);
     this.headGraphics.fillCircle(pupilRX, pupilRY, pupilRadius);
+
+    // 4. Draw Ears (Small circles at ±radius perpendicular offset)
+    const earRadius = r * 0.2;
+    const earColor = skin.main;
+    const earOffset = r * 0.8;
+    
+    const leftEarX = this.displayX + earOffset * Math.cos(angle - Math.PI/2);
+    const leftEarY = this.displayY + earOffset * Math.sin(angle - Math.PI/2);
+    
+    const rightEarX = this.displayX + earOffset * Math.cos(angle + Math.PI/2);
+    const rightEarY = this.displayY + earOffset * Math.sin(angle + Math.PI/2);
+    
+    this.headGraphics.fillStyle(earColor, 1);
+    this.headGraphics.fillCircle(leftEarX, leftEarY, earRadius);
+    this.headGraphics.fillCircle(rightEarX, rightEarY, earRadius);
+    
+    // 5. Draw Mouth (Red circle at head front)
+    const mouthColor = 0xFF0000;
+    const mouthWidth = r * 0.15;
+    const mouthOffset = r * 0.6;
+    
+    const mouthX = this.displayX + mouthOffset * Math.cos(angle);
+    const mouthY = this.displayY + mouthOffset * Math.sin(angle);
+    
+    this.headGraphics.fillStyle(mouthColor, 1);
+    this.headGraphics.fillCircle(mouthX, mouthY, mouthWidth);
   }
 
-  // Helper for rotated rectangles (eyes) - REMOVED as we switched to circle eyes
-  /* private drawRotatedRect... */
-
-  // SKIN PALETTES (Primary, Secondary, Outline)
+  // SKIN PALETTES
   private static SKINS = [
     { main: 0x525252, stripe: 0x737373, outline: 0x262626 }, // 0: Grey (Default)
     { main: 0xE74C3C, stripe: 0xC0392B, outline: 0x922B21 }, // 1: Red
@@ -430,7 +532,6 @@ update() {
   ];
 
   private drawBody() {
-    // Worms Zone Style: Striped Pattern (No Energy Core)
     const skinId = this.snake.skin || 0;
     const skin = SnakeRenderer.SKINS[skinId % SnakeRenderer.SKINS.length];
     
@@ -438,61 +539,75 @@ update() {
     const color2 = skin.stripe;
     const outlineColor = skin.outline;
     
-    const totalSegments = this.displaySegments.length; 
+    // Get segments to render based on LOD
+    const segmentsToRender = this.getSegmentsToRender();
     
-    for (let i = totalSegments - 1; i >= 0; i--) {
-      const seg = this.displaySegments[i]; 
+    for (let i = 0; i < segmentsToRender.length; i++) {
+      const seg = segmentsToRender[i];
       
-      // Calculate Tapering (Quadratic Ease-Out)
-      const taperStartIndex = Math.floor(totalSegments * VisualConfig.TAIL_TAPER_START);
-
-      let t = (i - taperStartIndex) / (totalSegments - taperStartIndex);
-      t = Math.min(1, Math.max(0, t)); // safety clamp
-
-      const smoothT = 1 - (1 - t) * (1 - t);
+      // Calculate radius for this position in snake
+      const t = i / Math.max(1, segmentsToRender.length - 1);
+      const baseRadius = this.snake.radius || 4;
+      
+      // Tapering
+      const taperStart = VisualConfig.TAIL_TAPER_START;
+      let taperT = (t - taperStart) / (1 - taperStart);
+      taperT = Math.min(1, Math.max(0, taperT));
+      const smoothT = 1 - (1 - taperT) * (1 - taperT);
       const scale = 1 - smoothT * (1 - VisualConfig.TAIL_MIN_SCALE);
       
-      const radius = VisualConfig.RENDER_RADIUS * scale;
-      // const radius = this.snake.radius * scale; // Use dynamic radius from server
-
-      // 1. Striped Shell
-      // Alternate color every 2 segments for broader stripes
-      const isStripe = Math.floor(i / 2) % 2 === 0;
-      this.bodyGraphics.fillStyle(isStripe ? color1 : color2, 1);
-      this.bodyGraphics.fillCircle(seg.x, seg.y, radius);
+      const segmentRadius = baseRadius * scale;
       
-      // 1b. Shell Outline
-      this.bodyGraphics.lineStyle(1, outlineColor, 0.8);
-      this.bodyGraphics.strokeCircle(seg.x, seg.y, radius);
+      // Alternate color every 2 segments
+      const isStripe = Math.floor(i / 2) % 2 === 0;
+      
+      // Fill circle (main body)
+      this.bodyGraphics.fillStyle(isStripe ? color1 : color2, 1);
+      this.bodyGraphics.fillCircle(seg.x, seg.y, segmentRadius);
+      
+      // Stroke circle outline (skip for very small segments)
+      if (segmentRadius > 2) {
+        this.bodyGraphics.lineStyle(1, outlineColor, 0.8);
+        this.bodyGraphics.strokeCircle(seg.x, seg.y, segmentRadius);
+      }
+      
+      // Glow effect for larger segments
+      if (segmentRadius > 15 && this.currentLODLevel <= 1) {
+        this.bodyGraphics.fillStyle(isStripe ? color1 : color2, 0.15);
+        this.bodyGraphics.fillCircle(seg.x, seg.y, segmentRadius * 1.1);
+      }
     }
   }
 
   private drawShadows() {
-    this.shadowGraphics.fillStyle(0x000000, VisualConfig.SHADOW_ALPHA); // Darker shadow for high contrast
-    const shadowOffset = 10; 
+    const shadowAlpha = VisualConfig.SHADOW_ALPHA;
+    const shadowOffset = 10;
     
     // Head Shadow
-    this.shadowGraphics.fillCircle(this.displayX + shadowOffset, this.displayY + shadowOffset, VisualConfig.RENDER_RADIUS);
-    // this.shadowGraphics.fillCircle(this.displayX + shadowOffset, this.displayY + shadowOffset, this.snake.radius);
+    const headRadius = this.snake.radius || VisualConfig.RENDER_RADIUS;
+    this.shadowGraphics.fillStyle(0x000000, shadowAlpha);
+    this.shadowGraphics.fillCircle(this.displayX + shadowOffset, this.displayY + shadowOffset, headRadius);
 
-    // Body Shadows (Tapered)
-    const totalSegments = this.displaySegments.length;
-    for (let i = totalSegments - 1; i >= 0; i--) {
-        const seg = this.displaySegments[i];
-        
-        // Match taper logic (Same as body)
-        const taperStartIndex = Math.floor(totalSegments * VisualConfig.TAIL_TAPER_START);
-        let t = (i - taperStartIndex) / (totalSegments - taperStartIndex);
-        t = Math.min(1, Math.max(0, t));
-        const smoothT = 1 - (1 - t) * (1 - t);
-        const scale = 1 - smoothT * (1 - VisualConfig.TAIL_MIN_SCALE);
-        
-        const radius = VisualConfig.RENDER_RADIUS * scale;
-        // const radius = this.snake.radius * scale;
-
-        const shadowAlpha = VisualConfig.SHADOW_ALPHA * scale; 
-        this.shadowGraphics.fillStyle(0x000000, shadowAlpha);
-        this.shadowGraphics.fillCircle(seg.x + shadowOffset, seg.y + shadowOffset, radius);
+    // Body Shadows (only for visible segments)
+    const segmentsToRender = this.getSegmentsToRender();
+    for (let i = 0; i < segmentsToRender.length; i++) {
+      const seg = segmentsToRender[i];
+      
+      // Calculate radius for shadow
+      const t = i / Math.max(1, segmentsToRender.length - 1);
+      const baseRadius = this.snake.radius || 4;
+      
+      const taperStart = VisualConfig.TAIL_TAPER_START;
+      let taperT = (t - taperStart) / (1 - taperStart);
+      taperT = Math.min(1, Math.max(0, taperT));
+      const smoothT = 1 - (1 - taperT) * (1 - taperT);
+      const scale = 1 - smoothT * (1 - VisualConfig.TAIL_MIN_SCALE);
+      
+      const radius = baseRadius * scale;
+      const segmentShadowAlpha = shadowAlpha * scale;
+      
+      this.shadowGraphics.fillStyle(0x000000, segmentShadowAlpha);
+      this.shadowGraphics.fillCircle(seg.x + shadowOffset, seg.y + shadowOffset, radius);
     }
   }
 
