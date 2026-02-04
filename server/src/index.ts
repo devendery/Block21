@@ -1,4 +1,4 @@
-// server/src/index.ts - UNLIMITED VERSION
+// server/src/index.ts
 import http from "http";
 import express from "express";
 import cors from "cors";
@@ -71,6 +71,20 @@ class Block21Room extends Room<GameState> {
   private foodGrid = new SpatialGrid(PhysicsConfig.AOI_RADIUS);
   private tickCounter = 0;
   private readonly GRID_REBUILD_EVERY = SERVER_CONSTANTS.GRID_REBUILD_EVERY;
+  private arenaTier = 1;
+  private arenaRadius: number = SERVER_CONSTANTS.ARENA_TIER_RADII[1];
+
+  getArenaRadius() {
+    return this.arenaRadius;
+  }
+
+  getArenaCenter() {
+    return { x: 0, y: 0 };
+  }
+
+  getArenaTier() {
+    return this.arenaTier;
+  }
 
   private getAoiRadius(me: import("../../shared/schemas/GameState").Player) {
     const len = me.length || 0;
@@ -81,7 +95,7 @@ class Block21Room extends Room<GameState> {
   }
 
   onCreate (options: any) {
-    console.log("Block21 Room Created! (UNLIMITED VERSION)");
+    console.log("Block21 Room Created! (ARENA VERSION) with options:", options);
     this.setState(new GameState());
     
     // Initialize systems
@@ -101,10 +115,10 @@ class Block21Room extends Room<GameState> {
       1000 / SERVER_CONSTANTS.TICK_RATE
     );
 
-    // Initial Food Spawn (spread across infinite space)
-    for (let i = 0; i < SERVER_CONSTANTS.INITIAL_FOOD_COUNT; i++) {
-      this.spawnFood();
-    }
+    const arena = this.computeArena();
+    this.arenaTier = arena.tier;
+    this.arenaRadius = arena.radius;
+    this.spawnFood(this.getTargetFoodCount());
   }
 
   onJoin (client: Client, options: any) {
@@ -114,9 +128,9 @@ class Block21Room extends Room<GameState> {
     const player = new Player();
     player.id = client.sessionId;
     
-    // INFINITE MAP: Spawn anywhere (no boundaries)
-    player.x = (Math.random() - 0.5) * SERVER_CONSTANTS.PLAYER_SPAWN_RANGE;
-    player.y = (Math.random() - 0.5) * SERVER_CONSTANTS.PLAYER_SPAWN_RANGE;
+    const spawn = this.randomPointInArena(this.arenaRadius * 0.85);
+    player.x = spawn.x;
+    player.y = spawn.y;
    // player.angle = Math.random() * Math.PI * 2;
    // Line 114: Change from Math.random() * Math.PI * 2 to Math.PI / 2
     player.angle = Math.PI / 2; // Snake starts facing UP
@@ -154,12 +168,12 @@ class Block21Room extends Room<GameState> {
 
     // Welcome message
     client.send("welcome", {
-      message: "Welcome to Worms Zone Unlimited!",
-      features: ["infinite_map", "unlimited_growth", "persistent_progress"]
+      message: "Welcome to Worms Zone Arena!",
+      features: ["elastic_arena", "center_density", "persistent_progress"]
     });
 
     // Spawn AI snakes (1 player = 20 AI snakes)
-    this.spawnAISnakes();
+    this.spawnAISnakes(player);
   }
 
   onLeave (client: Client, consented: boolean) {
@@ -196,13 +210,18 @@ class Block21Room extends Room<GameState> {
   }
 
   update(deltaTime: number) {
+    const frameStart = performance.now();
     const dt = deltaTime / 1000;
     this.tickCounter++;
 
+    const arena = this.computeArena();
+    this.arenaTier = arena.tier;
+    this.arenaRadius = arena.radius;
 
     
     // Update all snakes
     this.snakes.forEach((snake, sessionId) => {
+      if (this.aiSnakes.has(sessionId)) return;
       if (!snake.player.alive) return;
 
       const input = snake.lastInput ?? {
@@ -218,21 +237,30 @@ class Block21Room extends Room<GameState> {
       }
     });
 
-    // Update AI snakes
-    this.aiSnakes.forEach((aiController, aiId) => {
-      const snake = this.snakes.get(aiId);
-      if (!snake || !snake.player.alive) return;
-      
-      // Get AI decision and update the snake
-      const aiInput = aiController.update(dt);
-      snake.update(dt, aiInput);
-    });
+    const elapsedAfterPlayers = performance.now() - frameStart;
+    const budgetMs = 1000 / SERVER_CONSTANTS.TICK_RATE;
+    const slowFrame = elapsedAfterPlayers > budgetMs;
+
+    if (!slowFrame) {
+      this.aiSnakes.forEach((aiController, aiId) => {
+        const snake = this.snakes.get(aiId);
+        if (!snake || !snake.player.alive) return;
+        const aiInput = aiController.update(dt);
+        snake.update(dt, aiInput);
+      });
+    }
+
+    if (!slowFrame) {
+      if (this.tickCounter % 60 === 0) {
+        this.keepAISnakesNearHumans();
+      }
+    }
 
     // Update collision system
     this.collisionSystem.update();
 
     // Rebuild spatial grids periodically
-    if (this.tickCounter % this.GRID_REBUILD_EVERY === 0) {
+    if (!slowFrame && this.tickCounter % this.GRID_REBUILD_EVERY === 0) {
       this.playersGrid.clear();
       this.state.players.forEach((p, id) => {
         this.playersGrid.insert(id, p.x, p.y);
@@ -332,66 +360,114 @@ class Block21Room extends Room<GameState> {
       aoi.food = newFood;
     });
 
-    // Auto-spawn food to maintain density
-    if (this.state.food.size < SERVER_CONSTANTS.MIN_FOOD_COUNT) {
-      this.spawnFood();
+    const targetFoodCount = this.getTargetFoodCount();
+    if (this.state.food.size < targetFoodCount) {
+      this.spawnFood(Math.min(
+        SERVER_CONSTANTS.FOOD_SPAWN_MAX_PER_TICK,
+        targetFoodCount - this.state.food.size
+      ));
+    }
+
+    const frameEnd = performance.now();
+    const frameTime = frameEnd - frameStart;
+    if (frameTime > budgetMs) {
+      console.warn("Frame slow:", frameTime.toFixed(2), "ms");
     }
   }
 
-  spawnFood() {
-    const food = new Food();
-    
-    // DYNAMIC BOUNDARY: Spawn only inside current boundary
-    const currentBoundary = this.calculateCurrentBoundary();
-    const boundaryMargin = currentBoundary * 0.9; // 90% of boundary to keep food away from edges
-    
-    if (this.state.players.size > 0) {
-      const players = Array.from(this.state.players.values());
-      const randomPlayer = players[Math.floor(Math.random() * players.length)];
-      const angle = Math.random() * Math.PI * 2;
-      const distance = Math.random() * SERVER_CONSTANTS.FOOD_SPAWN_NEAR_PLAYER_RANGE;
-      
-      // Ensure food spawns inside boundary
-      food.x = randomPlayer.x + Math.cos(angle) * distance;
-      food.y = randomPlayer.y + Math.sin(angle) * distance;
-      
-      // Clamp to boundary
-      food.x = Math.max(-boundaryMargin, Math.min(boundaryMargin, food.x));
-      food.y = Math.max(-boundaryMargin, Math.min(boundaryMargin, food.y));
+  private spawnFood(count: number = 1) {
+    for (let i = 0; i < count; i++) {
+      const food = new Food();
+      const p = this.randomPointInArenaWithCenterWeight();
+      food.x = p.x;
+      food.y = p.y;
+      food.value = PhysicsConfig.FOOD_VALUE;
+
+      const id = Math.random().toString(36).substr(2, SERVER_CONSTANTS.FOOD_ID_LENGTH);
+      this.state.food.set(id, food);
+      this.foodGrid.insert(id, food.x, food.y);
+    }
+  }
+
+  private computeArena(): { tier: number; radius: number } {
+    let totalMass = 0;
+    for (const p of this.state.players.values()) {
+      if (!p.alive) continue;
+      totalMass += p.mass ?? 0;
+    }
+
+    let tier = 4;
+    if (totalMass < SERVER_CONSTANTS.ARENA_TIER1_MASS_MAX) tier = 1;
+    else if (totalMass < SERVER_CONSTANTS.ARENA_TIER2_MASS_MAX) tier = 2;
+    else if (totalMass < SERVER_CONSTANTS.ARENA_TIER3_MASS_MAX) tier = 3;
+
+    const radius = SERVER_CONSTANTS.ARENA_TIER_RADII[tier] ?? SERVER_CONSTANTS.ARENA_TIER_RADII[1];
+    return { tier, radius };
+  }
+
+  private getTargetFoodCount(): number {
+    const area = Math.PI * this.arenaRadius * this.arenaRadius;
+    const target = Math.floor(area * SERVER_CONSTANTS.FOOD_DENSITY);
+    return Math.min(
+      SERVER_CONSTANTS.ARENA_MAX_FOOD,
+      Math.max(SERVER_CONSTANTS.MIN_FOOD_COUNT, target)
+    );
+  }
+
+  private randomPointInArena(radius: number) {
+    const r = Math.sqrt(Math.random()) * radius;
+    const theta = Math.random() * Math.PI * 2;
+    return { x: Math.cos(theta) * r, y: Math.sin(theta) * r };
+  }
+
+  private randomPointInArenaWithCenterWeight() {
+    const arenaRadius = this.arenaRadius;
+    const centerZoneRadius = arenaRadius * SERVER_CONSTANTS.ARENA_CENTER_ZONE_RATIO;
+    const a1 = Math.PI * centerZoneRadius * centerZoneRadius;
+    const a2 = Math.PI * arenaRadius * arenaRadius - a1;
+    const w1 = SERVER_CONSTANTS.ARENA_CENTER_SPAWN_WEIGHT;
+    const w2 = 1;
+    const pCenter = (w1 * a1) / (w1 * a1 + w2 * a2);
+
+    const theta = Math.random() * Math.PI * 2;
+    let r: number;
+    if (Math.random() < pCenter) {
+      r = Math.sqrt(Math.random()) * centerZoneRadius;
     } else {
-      // No players, spawn inside boundary
-      food.x = (Math.random() - 0.5) * boundaryMargin;
-      food.y = (Math.random() - 0.5) * boundaryMargin;
+      const r0 = centerZoneRadius;
+      r = Math.sqrt(r0 * r0 + Math.random() * (arenaRadius * arenaRadius - r0 * r0));
     }
-    
-    food.value = PhysicsConfig.FOOD_VALUE;
-    const id = Math.random().toString(36).substr(2, SERVER_CONSTANTS.FOOD_ID_LENGTH);
-    this.state.food.set(id, food);
-    this.foodGrid.insert(id, food.x, food.y);
+
+    return { x: Math.cos(theta) * r, y: Math.sin(theta) * r };
   }
 
-  private spawnAISnakes() {
-    // Remove any existing AI snakes first
-    this.removeAllAISnakes();
-    
-    // Spawn 20 AI snakes for 1 player
-    const aiSnakeCount = 20;
+  private spawnAISnakes(anchorPlayer?: Player) {
+    if (this.aiSnakes.size > 0) return;
+
+    const aiSnakeCount = 8;
     
     for (let i = 0; i < aiSnakeCount; i++) {
-      this.spawnSingleAISnake(i);
+      this.spawnSingleAISnake(i, anchorPlayer);
     }
     
     console.log(`Spawned ${aiSnakeCount} AI snakes`);
   }
 
-  private spawnSingleAISnake(index: number) {
+  private spawnSingleAISnake(index: number, anchorPlayer?: Player) {
     // Create AI player state
     const player = new Player();
     player.id = `ai_${index}_${Date.now()}`;
     
-    // Spawn AI snake in reasonable range
-    player.x = (Math.random() - 0.5) * SERVER_CONSTANTS.PLAYER_SPAWN_RANGE;
-    player.y = (Math.random() - 0.5) * SERVER_CONSTANTS.PLAYER_SPAWN_RANGE;
+    const anchor = anchorPlayer ?? this.getAnyHumanPlayer();
+    if (anchor) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 300 + Math.random() * 600;
+      player.x = anchor.x + Math.cos(angle) * distance;
+      player.y = anchor.y + Math.sin(angle) * distance;
+    } else {
+      player.x = (Math.random() - 0.5) * SERVER_CONSTANTS.PLAYER_SPAWN_RANGE;
+      player.y = (Math.random() - 0.5) * SERVER_CONSTANTS.PLAYER_SPAWN_RANGE;
+    }
     player.angle = -Math.PI / 2; // Face UP like player snakes
     player.name = `AI_${Math.floor(Math.random() * 1000)}`;
     player.radius = PhysicsConfig.BASE_RADIUS;
@@ -413,6 +489,52 @@ class Block21Room extends Room<GameState> {
     // Store references
     this.snakes.set(player.id, snakeLogic);
     this.aiSnakes.set(player.id, aiController);
+  }
+
+  private getAnyHumanPlayer(): Player | null {
+    for (const p of this.state.players.values()) {
+      if (typeof p.id === "string" && p.id.startsWith("ai_")) continue;
+      return p;
+    }
+    return null;
+  }
+
+  private keepAISnakesNearHumans() {
+    const humans: Player[] = [];
+    for (const p of this.state.players.values()) {
+      if (typeof p.id === "string" && p.id.startsWith("ai_")) continue;
+      humans.push(p);
+    }
+    if (humans.length === 0) return;
+
+    const maxDist = PhysicsConfig.AOI_RADIUS * 3;
+    const maxDistSq = maxDist * maxDist;
+
+    for (const [aiId] of this.aiSnakes) {
+      const aiSnake = this.snakes.get(aiId);
+      if (!aiSnake || !aiSnake.player.alive) continue;
+
+      let nearest: Player | null = null;
+      let bestSq = Infinity;
+      for (const h of humans) {
+        const dx = aiSnake.player.x - h.x;
+        const dy = aiSnake.player.y - h.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestSq) {
+          bestSq = d2;
+          nearest = h;
+        }
+      }
+
+      if (!nearest || bestSq <= maxDistSq) continue;
+
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 400 + Math.random() * 800;
+      aiSnake.player.x = nearest.x + Math.cos(angle) * distance;
+      aiSnake.player.y = nearest.y + Math.sin(angle) * distance;
+      aiSnake.player.angle = -Math.PI / 2;
+      aiSnake.initSegments();
+    }
   }
 
   private removeAllAISnakes() {
@@ -454,25 +576,6 @@ class Block21Room extends Room<GameState> {
     }
   }
 
-  private calculateCurrentBoundary(): number {
-    // Calculate average player mass for dynamic boundary
-    const allPlayers = Array.from(this.state.players.values());
-    if (allPlayers.length === 0) return 1000; // Default boundary
-    
-    const totalMass = allPlayers.reduce((sum: number, p: any) => sum + p.mass, 0);
-    const averageMass = totalMass / allPlayers.length;
-    
-    // DEVELOPMENT: Start with very small boundary (1000 units)
-    const DEV_BASE_BOUNDARY = 1000;
-    const BASE_BOUNDARY = PhysicsConfig.UNIVERSE_LIMIT;
-    const MAX_BOUNDARY = BASE_BOUNDARY * 3; // Maximum 3x expansion
-    
-    // Scale boundary based on average mass (more mass = larger world)
-    const massScale = Math.min(3, 1 + (averageMass / 500)); // Faster scaling for development
-    const dynamicBoundary = DEV_BASE_BOUNDARY * massScale;
-    
-    return Math.min(MAX_BOUNDARY, Math.max(DEV_BASE_BOUNDARY, dynamicBoundary));
-  }
 }
 
 const app = express();
@@ -488,5 +591,5 @@ const region = process.env.BLOCK21_REGION || "local";
 gameServer.define(roomName, Block21Room);
 
 gameServer.listen(2567);
-console.log(`🔄 UNLIMITED VERSION: Listening on ws://localhost:2567`);
-console.log(`🌍 Features: Infinite Map | Unlimited Growth | 24/7 Play`);
+console.log(`🔄 ARENA VERSION: Listening on ws://localhost:2567`);
+console.log(`🌍 Features: Worms.Zone Arena | Center Density | PvP Focus`);

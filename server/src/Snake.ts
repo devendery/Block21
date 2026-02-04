@@ -13,6 +13,8 @@ interface ControlPoint {
 
 export class SnakeLogic {
   player: Player;
+  public prevHeadX: number;
+  public prevHeadY: number;
   
   // === REPLACE internalSegments with compressed storage ===
   private controlPoints: ControlPoint[] = []; // Store only every 10th segment
@@ -22,6 +24,8 @@ export class SnakeLogic {
   
   private headHistory: { x: number; y: number; angle: number }[] = [];
   private simplifiedCollisionSegments: {x: number, y: number, radius: number}[] = [];
+  private pathPoints: { x: number; y: number }[] = [];
+  private pathLength = 0;
   private lastSimplificationTime: number = 0;
   private readonly SIMPLIFICATION_INTERVAL = SERVER_CONSTANTS.SNAKE_SIMPLIFICATION_INTERVAL_MS; // ms
   
@@ -41,6 +45,8 @@ export class SnakeLogic {
   constructor(player: Player, room?: any) {
     this.player = player;
     this.player.speed = PhysicsConfig.BASE_SPEED;
+    this.prevHeadX = player.x;
+    this.prevHeadY = player.y;
     
     // Store room reference for dynamic boundary calculations
     this.room = room;
@@ -56,8 +62,10 @@ export class SnakeLogic {
       segmentIndex: 0
     });
     
-    // Initialize simplified segments
-    this.updateSimplifiedSegments();
+    this.pathPoints = [{ x: player.x, y: player.y }];
+    this.pathLength = 0;
+    this.rebuildCollisionSegments();
+    this.syncSegmentsToClient();
   }
 
   getDirectionVector(): Vector2 {
@@ -98,10 +106,17 @@ export class SnakeLogic {
       seg.y = this.player.y - backOffset * this.dirY;
       this.player.segments.push(seg);
     }
+
+    this.pathPoints = [{ x: this.player.x, y: this.player.y }];
+    this.pathLength = 0;
+    this.rebuildCollisionSegments();
   }
 
   update(dt: number, input: { vector: Vector2, boost: boolean }) {
     if (!this.player.alive) return;
+
+    this.prevHeadX = this.player.x;
+    this.prevHeadY = this.player.y;
 
     // Handle boost
     const canBoost = input.boost && this.virtualSegmentCount > 10;
@@ -144,13 +159,41 @@ export class SnakeLogic {
       this.player.angle = newAngle;
     }
     
+    const arenaRadius = this.room?.getArenaRadius?.();
+    const center = this.room?.getArenaCenter?.() ?? { x: 0, y: 0 };
+    let edgeSpeedFactor = 1;
+    if (typeof arenaRadius === "number") {
+      const distX = this.player.x - center.x;
+      const distY = this.player.y - center.y;
+      const dist = Math.sqrt(distX * distX + distY * distY);
+      if (dist > arenaRadius * SERVER_CONSTANTS.ARENA_EDGE_START_RATIO) {
+        edgeSpeedFactor = SERVER_CONSTANTS.ARENA_EDGE_SPEED_FACTOR;
+      }
+    }
+
     // Move forward
-    const moveDist = this.player.speed * fixedDt;
+    const moveDist = this.player.speed * fixedDt * edgeSpeedFactor;
     this.player.x += this.dirX * moveDist;
     this.player.y += this.dirY * moveDist;
 
-    // Boundary collision detection
-    this.checkBoundaryCollision();
+    if (typeof arenaRadius === "number") {
+      const distX = this.player.x - center.x;
+      const distY = this.player.y - center.y;
+      const dist = Math.sqrt(distX * distX + distY * distY);
+      if (dist > arenaRadius * SERVER_CONSTANTS.ARENA_EDGE_START_RATIO) {
+        const dx = center.x - this.player.x;
+        const dy = center.y - this.player.y;
+        this.player.x += dx * SERVER_CONSTANTS.ARENA_EDGE_PULL;
+        this.player.y += dy * SERVER_CONSTANTS.ARENA_EDGE_PULL;
+      }
+    }
+
+    this.updatePath(this.player.x, this.player.y);
+    this.rebuildCollisionSegments();
+    if ((this.room as any)?.broadcast) {
+      const segs = this.collisionSegments.map(p => ({ x: p.x, y: p.y }));
+      (this.room as any).broadcast("debug_segments", { id: this.player.id, segments: segs });
+    }
 
     // Add to head history
     this.headHistory.unshift({ 
@@ -182,7 +225,7 @@ export class SnakeLogic {
     // Update simplified segments periodically
     const now = Date.now();
     if (now - this.lastSimplificationTime > this.SIMPLIFICATION_INTERVAL) {
-      this.updateSimplifiedSegments();
+      this.syncSegmentsToClient();
       this.lastSimplificationTime = now;
     }
     
@@ -198,15 +241,75 @@ export class SnakeLogic {
     }
   }
 
+  private updatePath(x: number, y: number) {
+    const head = this.pathPoints[0];
+    if (head) {
+      const dx = x - head.x;
+      const dy = y - head.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d > 0) this.pathLength += d;
+    }
+
+    this.pathPoints.unshift({ x, y });
+
+    const spacing = Math.max(1, this.player.radius * 0.8);
+    const desiredLength = this.virtualSegmentCount * PhysicsConfig.SEGMENT_DISTANCE;
+    const keepLength = desiredLength + spacing * 2;
+
+    while (this.pathPoints.length >= 2 && this.pathLength > keepLength) {
+      const n = this.pathPoints.length;
+      const tail = this.pathPoints[n - 1];
+      const beforeTail = this.pathPoints[n - 2];
+      const dx = beforeTail.x - tail.x;
+      const dy = beforeTail.y - tail.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      this.pathLength = Math.max(0, this.pathLength - d);
+      this.pathPoints.pop();
+    }
+  }
+
+  private rebuildCollisionSegments() {
+    const spacing = Math.max(1, this.player.radius * 0.8);
+    const desiredLength = this.virtualSegmentCount * PhysicsConfig.SEGMENT_DISTANCE;
+    const maxSegments = SERVER_CONSTANTS.SNAKE_COLLISION_MAX_SEGMENTS;
+    const out: { x: number; y: number; radius: number }[] = [];
+    out.push({ x: this.player.x, y: this.player.y, radius: this.player.radius });
+    let prevDistance = 0;
+    let target = spacing;
+    for (let i = 0; i < this.pathPoints.length - 1; i++) {
+      const a = this.pathPoints[i];
+      const b = this.pathPoints[i + 1];
+      const sx = b.x - a.x;
+      const sy = b.y - a.y;
+      const segLen = Math.sqrt(sx * sx + sy * sy);
+      if (segLen <= 1e-6) continue;
+      const distance = prevDistance + segLen;
+      while (distance >= target && target <= desiredLength) {
+        const t = (target - prevDistance) / segLen;
+        out.push({
+          x: a.x + sx * t,
+          y: a.y + sy * t,
+          radius: this.player.radius
+        });
+        if (out.length >= maxSegments) {
+          out[0] = { x: this.player.x, y: this.player.y, radius: this.player.radius };
+          this.simplifiedCollisionSegments = out;
+          return;
+        }
+        target += spacing;
+      }
+      prevDistance = distance;
+      if (target > desiredLength) break;
+    }
+    out[0] = { x: this.player.x, y: this.player.y, radius: this.player.radius };
+    this.simplifiedCollisionSegments = out;
+  }
+
   private updatePlayerRadius() {
     const oldRadius = this.player.radius;
     const calculatedRadius = calculateSnakeRadius(this.player.mass);
-    console.log(`DEBUG: updatePlayerRadius() - mass: ${this.player.mass}, calculated: ${calculatedRadius}, old: ${oldRadius}`);
-    
     this.player.radius = calculatedRadius;
-    if (this.player.radius !== oldRadius) {
-      console.log(`Snake ${this.player.name} radius changed: ${oldRadius} -> ${this.player.radius} (mass: ${this.player.mass})`);
-    }
+    void oldRadius;
   }
   
   private updateBoundingRadius() {
@@ -273,7 +376,7 @@ export class SnakeLogic {
   grow(amount: number = 1) {
     const oldMass = this.player.mass;
     this.player.mass += amount;
-    console.log(`DEBUG: grow() - amount: ${amount}, old mass: ${oldMass}, new mass: ${this.player.mass}`);
+    void oldMass;
     const addSegments = Math.max(0, Math.floor(amount));
     if (addSegments === 0) return;
     this.virtualSegmentCount += addSegments;
@@ -311,6 +414,10 @@ export class SnakeLogic {
   }
 
   // === OPTIMIZED: Return simplified segments for collision ===
+  get collisionSegments() {
+    return this.simplifiedCollisionSegments;
+  }
+
   getSegmentsForCollision() {
     return this.simplifiedCollisionSegments;
   }
@@ -329,12 +436,13 @@ export class SnakeLogic {
   
   // Get bounding circle for broad-phase collision
   getBoundingCircle() {
-    return calculateSnakeBoundingCircle(
-      this.player.x,
-      this.player.y,
-      this.virtualSegmentCount,
-      this.player.radius
-    );
+    const radius = this.virtualSegmentCount + this.player.radius;
+    return {
+      x: this.player.x,
+      y: this.player.y,
+      radius,
+      entityId: ''
+    };
   }
 
   private syncSegmentsToClient() {

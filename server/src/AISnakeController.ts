@@ -48,6 +48,13 @@ export class AISnakeController {
     return player.radius;
   }
 
+  private getArena() {
+    const room = (this.snake as any).room;
+    const radius = room?.getArenaRadius?.();
+    const center = room?.getArenaCenter?.() ?? { x: 0, y: 0 };
+    return { radius, center };
+  }
+
   // Update the AI controller - should be called every frame
   update(dt: number) {
     const currentTime = Date.now() / 1000;
@@ -66,6 +73,22 @@ export class AISnakeController {
   }
 
   private makeDecision() {
+    const arena = this.getArena();
+    if (typeof arena.radius === "number") {
+      const pos = this.getPosition();
+      const dx = arena.center.x - pos.x;
+      const dy = arena.center.y - pos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > arena.radius * 0.8) {
+        const denom = Math.max(1e-6, dist);
+        this.currentDecision = {
+          vector: { x: dx / denom, y: dy / denom },
+          boost: false
+        };
+        return;
+      }
+    }
+
     // Decision layers (in priority order):
     // 1. Survival (avoid collisions)
     const avoidanceVector = this.calculateObstacleAvoidance();
@@ -118,32 +141,41 @@ export class AISnakeController {
     if (this.knownFood.size === 0) return null;
     
     const position = this.getPosition();
+    const arena = this.getArena();
     
     // Find closest food
     let closestFood: { x: number; y: number; value: number } | null = null;
-    let minDistance = Infinity;
+    let closestId: string | null = null;
+    let bestScore = Infinity;
     
     for (const [id, food] of this.knownFood) {
       const dx = food.x - position.x;
       const dy = food.y - position.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
       
-      if (distance < minDistance && distance < this.visionRadius) {
-        minDistance = distance;
-        closestFood = food;
+      if (distance < this.visionRadius) {
+        const centerDx = food.x - (arena.center?.x ?? 0);
+        const centerDy = food.y - (arena.center?.y ?? 0);
+        const centerDist = Math.sqrt(centerDx * centerDx + centerDy * centerDy);
+
+        const score = distance + centerDist * 0.2;
+        if (score < bestScore) {
+          bestScore = score;
+          closestId = id;
+          closestFood = food;
+        }
       }
     }
-    
-    if (!closestFood) return null;
+
+    if (!closestFood || !closestId) return null;
     
     // Move toward food with some randomness
-    const dx = closestFood.x - position.x;
-    const dy = closestFood.y - position.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    const fdx = closestFood.x - position.x;
+    const fdy = closestFood.y - position.y;
+    const fdist = Math.sqrt(fdx * fdx + fdy * fdy);
     
-    if (distance < 10) {
-      // Very close to food, remove from knowledge
-      this.knownFood.delete(Object.keys(this.knownFood)[0]); // Remove first entry
+    if (fdist < 10) {
+      this.knownFood.delete(closestId);
       return null;
     }
     
@@ -152,29 +184,40 @@ export class AISnakeController {
     const noiseY = (Math.random() - 0.5) * this.personalityNoise;
     
     return {
-      x: dx / distance + noiseX,
-      y: dy / distance + noiseY
+      x: fdx / fdist + noiseX,
+      y: fdy / fdist + noiseY
     };
   }
 
   private calculateExploration(): AIDecision {
-    // Random exploration with tendency to move in current direction
     const currentDir = this.getCurrentDirection();
     const currentAngle = Math.atan2(currentDir.y, currentDir.x);
     const explorationAngle = currentAngle + (Math.random() - 0.5) * Math.PI * this.personalityNoise;
     
+    const base = { x: Math.cos(explorationAngle), y: Math.sin(explorationAngle) };
+    const arena = this.getArena();
+    if (typeof arena.radius === "number") {
+      const pos = this.getPosition();
+      const dx = arena.center.x - pos.x;
+      const dy = arena.center.y - pos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 1e-6) {
+        const pull = Math.min(0.4, dist / arena.radius);
+        const centerVec = { x: dx / dist, y: dy / dist };
+        const vx = base.x * (1 - pull) + centerVec.x * pull;
+        const vy = base.y * (1 - pull) + centerVec.y * pull;
+        const denom = Math.max(1e-6, Math.sqrt(vx * vx + vy * vy));
+        return { vector: { x: vx / denom, y: vy / denom }, boost: Math.random() < 0.1 };
+      }
+    }
+
     return {
-      vector: {
-        x: Math.cos(explorationAngle),
-        y: Math.sin(explorationAngle)
-      },
-      boost: Math.random() < 0.1 // Occasionally boost randomly
+      vector: base,
+      boost: Math.random() < 0.1
     };
   }
 
   private shouldBoostForFood(): boolean {
-    // Boost only when we have enough segments and it's strategic
-    // For now, use a simple random chance
     return Math.random() < 0.3;
   }
 

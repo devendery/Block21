@@ -14,6 +14,10 @@ export class MainScene extends Phaser.Scene {
 
   private mySessionId: string | null = null;
 
+  private worldLayer!: Phaser.GameObjects.Container;
+  private uiLayer!: Phaser.GameObjects.Container;
+  private uiCamera!: Phaser.Cameras.Scene2D.Camera;
+
   private inputManager!: InputManager;
   private grid!: Phaser.GameObjects.Grid;
   private debugText!: Phaser.GameObjects.Text;
@@ -21,10 +25,14 @@ export class MainScene extends Phaser.Scene {
   // UI Elements
   private leaderboardContainer!: Phaser.GameObjects.Container;
   private leaderboardTexts: Phaser.GameObjects.Text[] = [];
+  private minimapContainer!: Phaser.GameObjects.Container;
   private minimapGraphics!: Phaser.GameObjects.Graphics;
   private minimapBorder!: Phaser.GameObjects.Graphics;
-  private boundaryGraphics!: Phaser.GameObjects.Graphics;
   private foodTexts: Map<string, Phaser.GameObjects.Text> = new Map();
+  private readonly HUD_MARGIN = 20;
+  private readonly MINIMAP_SIZE = 180;
+  private debugSegments: Map<string, { x: number; y: number }[]> = new Map();
+  private debugSegmentsGraphics!: Phaser.GameObjects.Graphics;
 
   // Camera proxy (authoritative from STATE)
   private localSnakeProxy = { x: 0, y: 0, width: 0, height: 0 };
@@ -50,6 +58,26 @@ private ZOOM_LERP = 0.04;
     super('MainScene');
   }
 
+  private layoutHud() {
+    const cam = this.cameras.main;
+
+    if (this.leaderboardContainer) {
+      this.leaderboardContainer.setPosition(this.HUD_MARGIN, this.HUD_MARGIN);
+      this.leaderboardContainer.setScale(1);
+    }
+
+    if (this.minimapContainer) {
+      const mapSize = this.MINIMAP_SIZE;
+      const margin = this.HUD_MARGIN;
+      this.minimapContainer.setScale(1);
+      this.minimapContainer.setPosition(cam.width - margin - mapSize, margin);
+    }
+
+    if (this.uiCamera) {
+      this.uiCamera.setSize(cam.width, cam.height);
+    }
+  }
+
   // Update viewport scaling based on window size
   private updateViewportScaling() {
     const viewportWidth = this.cameras.main.width;
@@ -67,6 +95,7 @@ private ZOOM_LERP = 0.04;
     VisualConfig.RENDER_RADIUS = VisualConfig.RENDER_RADIUS * this.currentViewportScale;
     
     console.log(`Viewport scaling updated: ${this.currentViewportScale.toFixed(2)}x (${viewportWidth}x${viewportHeight})`);
+    this.layoutHud();
   }
 preload() {
   this.textures.generate('particle', {
@@ -78,9 +107,21 @@ preload() {
 
 
   async create() {
+    this.worldLayer = this.add.container(0, 0);
+    this.uiLayer = this.add.container(0, 0);
+
     this.createEnvironment();
     this.createUI();
     this.inputManager = new InputManager(this, this.localSnakeProxy as any);
+
+    const cam = this.cameras.main;
+    this.uiCamera = this.cameras.add(0, 0, cam.width, cam.height);
+    this.uiCamera.setScroll(0, 0);
+    this.uiCamera.setZoom(1);
+    this.uiCamera.ignore(this.worldLayer);
+    cam.ignore(this.uiLayer);
+    this.debugSegmentsGraphics = this.add.graphics();
+    this.debugSegmentsGraphics.setDepth(12);
 
     // Handle window resize for responsive scaling
     const handleResize = () => {
@@ -94,7 +135,9 @@ preload() {
       window.removeEventListener('resize', handleResize);
     });
 
-    this.client = new Client("ws://localhost:2567");
+    const hostname = typeof window !== "undefined" ? window.location.hostname : "localhost";
+    const wsProtocol = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss" : "ws";
+    this.client = new Client(`${wsProtocol}://${hostname}:2567`);
 
     try {
       this.room = await this.client.joinOrCreate<GameState>("block21", { name: "Player" });
@@ -116,6 +159,9 @@ preload() {
 
       // Initial check immediately
       this.setupRoomHandlers();
+      this.room.onMessage("debug_segments", (payload: { id: string; segments: { x: number; y: number }[] }) => {
+        this.debugSegments.set(payload.id, payload.segments);
+      });
 
       // ✅ cleanup on reload / tab close
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -158,6 +204,7 @@ preload() {
       0x154360, 0.5, 0x1b4f72, 0.3
     );
     this.grid.setDepth(-1);
+    this.worldLayer.add(this.grid);
 
     // World Border
     //const border = this.add.graphics();
@@ -170,46 +217,49 @@ preload() {
     this.debugText = this.add.text(
       10, 10, 'Phase 3: Multiplayer',
       { color: '#ffffff', fontSize: '20px' }
-    ).setScrollFactor(0).setDepth(100).setVisible(false);
+    ).setDepth(100).setVisible(false);
+    this.uiLayer.add(this.debugText);
   }
 
   createUI() {
     // 1. Leaderboard (Top Left) - FIXED: No background, direct text on screen
-    this.leaderboardContainer = this.add.container(20, 20).setScrollFactor(0).setDepth(1000);
+    this.leaderboardContainer = this.add.container(0, 0).setDepth(1000);
     
     const title = this.add.text(0, 0, "TOP PLAYERS", {
        fontSize: "18px",
        fontStyle: "bold",
        color: "#ffcc00"
-     }).setScrollFactor(0);
+     });
     this.leaderboardContainer.add(title);
 
     for (let i = 0; i < 10; i++) {
       const txt = this.add.text(0, 30 + i * 22, "", {
         fontSize: "14px",
         color: "#ffffff"
-      }).setScrollFactor(0);
+      });
       this.leaderboardTexts.push(txt);
       this.leaderboardContainer.add(txt);
     }
 
     // 2. Minimap (Top Right)
-    const mapSize = 180;
-    const margin = 20;
-    const x = this.cameras.main.width - mapSize - margin;
-    const y = margin;
+    const mapSize = this.MINIMAP_SIZE;
 
-    this.minimapBorder = this.add.graphics().setScrollFactor(0).setDepth(1000);
+    this.minimapContainer = this.add.container(0, 0);
+
+    this.minimapBorder = this.add.graphics();
     this.minimapBorder.lineStyle(2, 0xffffff, 0.5);
-    this.minimapBorder.strokeRect(x, y, mapSize, mapSize);
+    this.minimapBorder.strokeRect(0, 0, mapSize, mapSize);
     this.minimapBorder.fillStyle(0x000000, 0.3);
-    this.minimapBorder.fillRect(x, y, mapSize, mapSize);
+    this.minimapBorder.fillRect(0, 0, mapSize, mapSize);
 
-    // 3. Boundary Visualization (Visible Play Area)
-    this.boundaryGraphics = this.add.graphics().setDepth(500);
-    this.updateBoundaryVisualization(1000); // Initial boundary
+    this.minimapGraphics = this.add.graphics();
 
-    this.minimapGraphics = this.add.graphics().setScrollFactor(0).setDepth(1001);
+    this.minimapContainer.add(this.minimapBorder);
+    this.minimapContainer.add(this.minimapGraphics);
+
+    this.uiLayer.add(this.leaderboardContainer);
+    this.uiLayer.add(this.minimapContainer);
+    this.layoutHud();
   }
 
   // ===============================
@@ -284,6 +334,7 @@ private updateCameraZoom() {
     console.log("Player joined:", sessionId);
 
     const renderer = new SnakeRenderer(this, player, sessionId === this.mySessionId);
+    renderer.attachTo(this.worldLayer);
     this.snakeRenderers.set(sessionId, renderer);
 
     // ✅ Listen for Death (Immediate Explosion)
@@ -379,6 +430,7 @@ handlePlayerRemove(_player: Player, sessionId: string) {
     console.warn("💀 YOU DIED — Respawning...");
     // Optional: Add a brief visual indicator that you died
   }
+    this.debugSegments.delete(sessionId);
 }
 
 
@@ -510,9 +562,19 @@ private playDeathExplosion(x: number, y: number) {
   this.updateFood();
 
   // 6. Update UI
+  this.updateCameraZoom();
+  this.layoutHud();
   this.updateLeaderboard();
   this.updateMinimap();
-  this.updateCameraZoom();
+
+  this.debugSegmentsGraphics.clear();
+  this.debugSegmentsGraphics.fillStyle(0xff0000, 0.8);
+  this.debugSegments.forEach((points) => {
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      this.debugSegmentsGraphics.fillCircle(p.x, p.y, 3);
+    }
+  });
 
 }
 
@@ -533,6 +595,7 @@ private updateFood() {
       const txt = this.add.text(food.x, food.y, emoji, { fontSize: "42px" })
         .setOrigin(0.5)
         .setDepth(1);
+      this.worldLayer.add(txt);
       this.foodTexts.set(id, txt);
     } else {
       const txt = this.foodTexts.get(id)!;
@@ -570,18 +633,7 @@ private updateLeaderboard() {
 }
 
 private updateMinimap() {
-  const mapSize = 180;
-  const margin = 20;
-  const x = this.cameras.main.width - mapSize - margin;
-  const y = margin;
-
-  // Update border position (in case of resize)
-  this.minimapBorder.clear();
-  this.minimapBorder.lineStyle(2, 0xffffff, 0.5);
-  this.minimapBorder.strokeRect(x, y, mapSize, mapSize);
-  this.minimapBorder.fillStyle(0x000000, 0.3);
-  this.minimapBorder.fillRect(x, y, mapSize, mapSize);
-
+  const mapSize = this.MINIMAP_SIZE;
   this.minimapGraphics.clear();
   
   // With this (use a fixed large world size for minimap):
@@ -591,7 +643,7 @@ private updateMinimap() {
 
   // Draw border circle on minimap
   this.minimapGraphics.lineStyle(1, 0xffffff, 0.2);
-  this.minimapGraphics.strokeCircle(x + mapSize/2, y + mapSize/2, (worldSize/2) * scale);
+  this.minimapGraphics.strokeCircle(mapSize / 2, mapSize / 2, (worldSize / 2) * scale);
 
   this.room.state.players.forEach((player) => {
     if (!player.alive) return;
@@ -601,8 +653,8 @@ private updateMinimap() {
     const relY = player.y * scale;
 
     // Screen position
-    const px = x + mapSize / 2 + relX;
-    const py = y + mapSize / 2 + relY;
+    const px = mapSize / 2 + relX;
+    const py = mapSize / 2 + relY;
 
     if (player.id === this.mySessionId) {
       this.minimapGraphics.fillStyle(0x00ff00, 1);
@@ -613,25 +665,5 @@ private updateMinimap() {
     }
   });
 }
-
-  // Update boundary visualization based on current boundary size
-  updateBoundaryVisualization(boundarySize: number) {
-    this.boundaryGraphics.clear();
-    
-    // Draw boundary as a red rectangle
-    this.boundaryGraphics.lineStyle(3, 0xff0000, 0.7); // Red border with transparency
-    this.boundaryGraphics.strokeRect(-boundarySize, -boundarySize, boundarySize * 2, boundarySize * 2);
-    
-    // Add subtle grid inside boundary for better visibility
-    this.boundaryGraphics.lineStyle(1, 0xff6666, 0.3);
-    const gridSize = boundarySize / 5;
-    for (let i = -boundarySize; i <= boundarySize; i += gridSize) {
-      this.boundaryGraphics.moveTo(i, -boundarySize);
-      this.boundaryGraphics.lineTo(i, boundarySize);
-      this.boundaryGraphics.moveTo(-boundarySize, i);
-      this.boundaryGraphics.lineTo(boundarySize, i);
-    }
-    this.boundaryGraphics.strokePath();
-  }
 
 }

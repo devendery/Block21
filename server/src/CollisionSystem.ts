@@ -1,120 +1,19 @@
 // server/src/CollisionSystem.ts - OPTIMIZED VERSION
-import { PhysicsConfig, checkCircleCollision, calculateSnakeRadius, BoundingCircle, circleAABBCollision, aabbOverlap } from './Physics';
-import { GameState, Player, Food } from './State';
+import { PhysicsConfig, checkCircleCollision } from './Physics';
+import { GameState, Food } from './State';
 import { SnakeLogic } from './Snake';
 
-// === NEW: Hierarchical Spatial Grid ===
-class HierarchicalSpatialGrid {
-  private grids: Map<number, Map<string, Set<string>>> = new Map();
-  private cellSizes: number[] = [1000, 500, 250]; // Three levels: Far, Medium, Near
-  
-  constructor() {
-    this.cellSizes.forEach(size => {
-      this.grids.set(size, new Map());
-    });
+// === NEW: Segment Bucket System ===
+class SegmentBucket {
+  private segments: Array<{ ownerId: string; x: number; y: number; radius: number }> = [];
+  addSegment(ownerId: string, x: number, y: number, radius: number) {
+    this.segments.push({ ownerId, x, y, radius });
   }
-  
-  clear() {
-    this.grids.forEach(grid => grid.clear());
+  getEntries(): Array<{ ownerId: string; x: number; y: number; radius: number }> {
+    return this.segments;
   }
-  
-  private getCellKey(x: number, y: number, cellSize: number): string {
-    const cellX = Math.floor(x / cellSize);
-    const cellY = Math.floor(y / cellSize);
-    return `${cellSize}:${cellX},${cellY}`;
-  }
-  
-  insert(entityId: string, x: number, y: number, radius: number) {
-    // Insert into appropriate grid levels based on radius
-    this.cellSizes.forEach(cellSize => {
-      if (radius <= cellSize * 2) { // Only insert if entity fits in cell
-        const key = this.getCellKey(x, y, cellSize);
-        const grid = this.grids.get(cellSize)!;
-        
-        if (!grid.has(key)) grid.set(key, new Set());
-        grid.get(key)!.add(entityId);
-      }
-    });
-  }
-  
-  query(x: number, y: number, radius: number): Set<string> {
-    const result = new Set<string>();
-    
-    // Query from coarse to fine grids
-    for (const cellSize of this.cellSizes) {
-      if (radius > cellSize * 2) continue; // Skip grids too fine for this radius
-      
-      const grid = this.grids.get(cellSize)!;
-      const centerCellX = Math.floor(x / cellSize);
-      const centerCellY = Math.floor(y / cellSize);
-      const radiusCells = Math.ceil(radius / cellSize);
-      
-      for (let dx = -radiusCells; dx <= radiusCells; dx++) {
-        for (let dy = -radiusCells; dy <= radiusCells; dy++) {
-          const key = `${cellSize}:${centerCellX + dx},${centerCellY + dy}`;
-          const entities = grid.get(key);
-          if (entities) {
-            entities.forEach(id => result.add(id));
-          }
-        }
-      }
-      
-      // If we found entities in this grid level, we can stop
-      if (result.size > 0 && cellSize <= 500) break;
-    }
-    
-    return result;
-  }
-}
-
-// === NEW: Collision Bucket System ===
-class CollisionBucket {
-  private snakes: Map<string, { snake: SnakeLogic, bounds: BoundingCircle }> = new Map();
-  private bounds: { minX: number, maxX: number, minY: number, maxY: number };
-  
-  constructor(x: number, y: number, size: number) {
-    this.bounds = {
-      minX: x - size,
-      maxX: x + size,
-      minY: y - size,
-      maxY: y + size
-    };
-  }
-  
-  addSnake(playerId: string, snake: SnakeLogic) {
-    const bounds = snake.getBoundingCircle();
-    bounds.entityId = playerId;
-    this.snakes.set(playerId, { snake, bounds });
-  }
-  
-  removeSnake(playerId: string) {
-    this.snakes.delete(playerId);
-  }
-  
-  getCollisionCandidates(playerId: string): SnakeLogic[] {
-    const candidates: SnakeLogic[] = [];
-    const self = this.snakes.get(playerId);
-    if (!self) return candidates;
-    
-    for (const [otherId, other] of this.snakes.entries()) {
-      if (otherId === playerId) continue;
-      
-      // Broad-phase: Check bounding circles
-      const dx = self.bounds.x - other.bounds.x;
-      const dy = self.bounds.y - other.bounds.y;
-      const distanceSq = dx * dx + dy * dy;
-      const radiusSum = self.bounds.radius + other.bounds.radius;
-      
-      if (distanceSq < radiusSum * radiusSum) {
-        candidates.push(other.snake);
-      }
-    }
-    
-    return candidates;
-  }
-  
   isEmpty(): boolean {
-    return this.snakes.size === 0;
+    return this.segments.length === 0;
   }
 }
 
@@ -123,15 +22,15 @@ export class CollisionSystem {
   private snakeLogics: Map<string, SnakeLogic> = new Map();
   
   // === NEW: Optimized data structures ===
-  private spatialGrid: HierarchicalSpatialGrid;
-  private collisionBuckets: Map<string, CollisionBucket> = new Map();
-  private readonly BUCKET_SIZE = 2000;
+  private readonly BUCKET_SIZE = 50; // Increased to 50 as requested
+  private readonly COLLISION_SEGMENT_RADIUS = 10; // Consistent segment radius
   private foodGrid: Map<string, Set<string>> = new Map(); // cellKey -> foodIds
   private readonly FOOD_CELL_SIZE = 500;
+  private readonly TOI_EPS = 1e-6;
+  private lastCollisionSegmentsLogAt = 0;
   
   constructor(gameState: GameState) {
     this.gameState = gameState;
-    this.spatialGrid = new HierarchicalSpatialGrid();
   }
   
   registerSnakeLogic(playerId: string, snakeLogic: SnakeLogic) {
@@ -149,114 +48,198 @@ export class CollisionSystem {
   }
   
   update() {
-    // Step 1: Update spatial indices
-    this.updateAllSpatialIndices();
-    
-    // Step 2: Process collisions bucket by bucket
-    this.processCollisionsByBucket();
-    
-    // Step 3: Update food grid
     this.updateFoodGrid();
-  }
-  
-  private updateAllSpatialIndices() {
-    this.spatialGrid.clear();
-    
-    for (const [playerId, snakeLogic] of this.snakeLogics.entries()) {
-      if (!snakeLogic.player.alive) continue;
-      
-      const bounds = snakeLogic.getBoundingCircle();
-      this.spatialGrid.insert(
-        playerId,
-        snakeLogic.player.x,
-        snakeLogic.player.y,
-        bounds.radius
-      );
+
+    const toKill = new Set<string>();
+    this.processCollisionsByBucket(toKill);
+
+    if (this.snakeLogics.size > 0 && Date.now() - this.lastCollisionSegmentsLogAt > 2000) {
+      // console.log(`[CollisionSystem] Tracking ${this.snakeLogics.size} snakes`);
+    }
+
+    for (const id of toKill) {
+      const snakeLogic = this.snakeLogics.get(id);
+      if (!snakeLogic?.player.alive) continue;
+      this.handleDeath(snakeLogic, 'pvp_toi');
     }
   }
-  
-  private processCollisionsByBucket() {
-    // Group snakes into collision buckets
-    const bucketMap = new Map<string, CollisionBucket>();
-    
+
+  private processCollisionsByBucket(toKill: Set<string>) {
+    const bucketMap = new Map<string, SegmentBucket>();
+    let totalSegmentsInserted = 0;
+
+    // Insert each collision segment into buckets
     for (const [playerId, snakeLogic] of this.snakeLogics.entries()) {
       if (!snakeLogic.player.alive) continue;
-      
-      const bucketX = Math.floor(snakeLogic.player.x / this.BUCKET_SIZE);
-      const bucketY = Math.floor(snakeLogic.player.y / this.BUCKET_SIZE);
-      const bucketKey = `${bucketX},${bucketY}`;
-      
-      if (!bucketMap.has(bucketKey)) {
-        bucketMap.set(bucketKey, new CollisionBucket(
-          bucketX * this.BUCKET_SIZE + this.BUCKET_SIZE / 2,
-          bucketY * this.BUCKET_SIZE + this.BUCKET_SIZE / 2,
-          this.BUCKET_SIZE
-        ));
+      if (!snakeLogic.collisionSegments) continue; // Null check as requested
+
+      const segments = snakeLogic.collisionSegments;
+      for (let i = 0; i < segments.length; i++) {
+        const s = segments[i];
+        const bucketX = Math.floor(s.x / this.BUCKET_SIZE);
+        const bucketY = Math.floor(s.y / this.BUCKET_SIZE);
+        const bucketKey = `${bucketX},${bucketY}`;
+        if (!bucketMap.has(bucketKey)) {
+          bucketMap.set(bucketKey, new SegmentBucket());
+        }
+        // Use COLLISION_SEGMENT_RADIUS consistently
+        bucketMap.get(bucketKey)!.addSegment(playerId, s.x, s.y, this.COLLISION_SEGMENT_RADIUS);
+        totalSegmentsInserted++;
       }
-      
-      bucketMap.get(bucketKey)!.addSnake(playerId, snakeLogic);
     }
-    
-    // Process collisions within each bucket
-    for (const [bucketKey, bucket] of bucketMap.entries()) {
-      this.processBucketCollisions(bucket);
+
+    if (totalSegmentsInserted > 0 && Date.now() - this.lastCollisionSegmentsLogAt > 2000) {
+      // console.log(`[CollisionSystem] Bucketed ${totalSegmentsInserted} segments across ${bucketMap.size} cells`);
     }
-  }
-  
-  private processBucketCollisions(bucket: CollisionBucket) {
-    const snakeEntries = Array.from(this.snakeLogics.entries());
-    
-    for (let i = 0; i < snakeEntries.length; i++) {
-      const [playerId, snakeLogic] = snakeEntries[i];
+
+    // Build candidate snake pairs from head vs nearby segments
+    const candidatePairs = new Set<string>(); // "aId|bId" sorted
+    let pairsChecked = 0;
+
+    for (const [playerId, snakeLogic] of this.snakeLogics.entries()) {
       if (!snakeLogic.player.alive) continue;
-      
-      // Get collision candidates from spatial grid (NOT all snakes)
-      const nearbyIds = this.spatialGrid.query(
-        snakeLogic.player.x,
-        snakeLogic.player.y,
-        snakeLogic.player.boundingRadius * 3
-      );
-      
-      // 1. Check food collisions (optimized with grid)
+      const headX = snakeLogic.player.x;
+      const headY = snakeLogic.player.y;
+      const headRadius = snakeLogic.player.radius;
+      const hx = Math.floor(headX / this.BUCKET_SIZE);
+      const hy = Math.floor(headY / this.BUCKET_SIZE);
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const nbx = hx + dx;
+          const nby = hy + dy;
+          const neighborKey = `${nbx},${nby}`;
+          const bucket = bucketMap.get(neighborKey);
+          if (!bucket) continue;
+          for (const entry of bucket.getEntries()) {
+            if (entry.ownerId === playerId) continue; // Self-collision filtering
+            
+            // Optional fine broad-phase: head vs segment proximity
+            const ddx = headX - entry.x;
+            const ddy = headY - entry.y;
+            // Use COLLISION_SEGMENT_RADIUS consistently for proximity check
+            const radSum = headRadius + this.COLLISION_SEGMENT_RADIUS;
+            if (ddx * ddx + ddy * ddy > radSum * radSum) continue;
+            
+            const a = playerId < entry.ownerId ? playerId : entry.ownerId;
+            const b = playerId < entry.ownerId ? entry.ownerId : playerId;
+            candidatePairs.add(`${a}|${b}`);
+            pairsChecked++;
+          }
+        }
+      }
+    }
+
+    if (candidatePairs.size > 0 && Date.now() - this.lastCollisionSegmentsLogAt > 2000) {
+      // console.log(`[CollisionSystem] Found ${candidatePairs.size} candidate pairs to evaluate`);
+      this.lastCollisionSegmentsLogAt = Date.now();
+    }
+
+    // Evaluate candidate pairs via sweep TOI
+    for (const key of candidatePairs) {
+      const [aId, bId] = key.split("|");
+      const aSnake = this.snakeLogics.get(aId);
+      const bSnake = this.snakeLogics.get(bId);
+      if (!aSnake || !bSnake) continue;
+      this.processPair(aId, aSnake, bId, bSnake, toKill);
+    }
+
+    for (const [playerId, snakeLogic] of this.snakeLogics.entries()) {
+      if (!snakeLogic.player.alive) continue;
+      if (toKill.has(playerId)) continue;
       this.checkFoodCollisionsOptimized(snakeLogic);
-      
-      // 2. Check snake collisions with nearby snakes only
-      for (const otherId of nearbyIds) {
-        if (otherId === playerId) continue;
-        
-        const otherSnakeLogic = this.snakeLogics.get(otherId);
-        if (!otherSnakeLogic?.player.alive) continue;
-        
-        // Quick distance check first
-        const dx = snakeLogic.player.x - otherSnakeLogic.player.x;
-        const dy = snakeLogic.player.y - otherSnakeLogic.player.y;
-        const minDistance = snakeLogic.player.radius + otherSnakeLogic.player.radius;
-        
-        if (dx * dx + dy * dy > minDistance * minDistance * 9) { // 3x radius squared
-          continue;
-        }
-        
-        // Head-to-head collision
-        if (checkCircleCollision(
-          snakeLogic.player.x, snakeLogic.player.y, snakeLogic.player.radius,
-          otherSnakeLogic.player.x, otherSnakeLogic.player.y, otherSnakeLogic.player.radius
-        )) {
-          this.handleDeath(snakeLogic, 'head_to_head');
-          this.handleDeath(otherSnakeLogic, 'head_to_head');
-          continue;
-        }
-        
-        // Head-to-body collision with segment sampling
-        if (this.checkHeadToBodyOptimized(snakeLogic, otherSnakeLogic)) {
-          this.handleDeath(snakeLogic, 'head_to_body');
-        }
-      }
-      
-      // 3. Check self-collision (optimized)
-      if (this.checkSelfCollisionOptimized(snakeLogic)) {
-        this.handleDeath(snakeLogic, 'self_collision');
-      }
     }
+  }
+
+  private processPair(
+    aId: string,
+    aSnake: SnakeLogic,
+    bId: string,
+    bSnake: SnakeLogic,
+    toKill: Set<string>
+  ) {
+    if (aId === bId) return;
+    if (toKill.has(aId) || toKill.has(bId)) return;
+    if (!aSnake.player.alive || !bSnake.player.alive) return;
+
+    const tA = this.sweepHeadVsChain(aSnake, bSnake);
+    const tB = this.sweepHeadVsChain(bSnake, aSnake);
+
+    if (!Number.isFinite(tA) && !Number.isFinite(tB)) return;
+
+    if (tA + this.TOI_EPS < tB) {
+      // console.log(`[Collision] Snake ${aId} killed by ${bId} (tA=${tA.toFixed(4)}, tB=${tB.toFixed(4)})`);
+      toKill.add(aId);
+      return;
+    }
+
+    if (tB + this.TOI_EPS < tA) {
+      // console.log(`[Collision] Snake ${bId} killed by ${aId} (tA=${tA.toFixed(4)}, tB=${tB.toFixed(4)})`);
+      toKill.add(bId);
+      return;
+    }
+
+    if (Number.isFinite(tA) && Number.isFinite(tB)) {
+      // console.log(`[Collision] Double kill: ${aId} and ${bId} (tA=${tA.toFixed(4)}, tB=${tB.toFixed(4)})`);
+      toKill.add(aId);
+      toKill.add(bId);
+    }
+  }
+
+  private sweepHeadVsChain(attacker: SnakeLogic, defender: SnakeLogic): number {
+    const ax0 = attacker.prevHeadX;
+    const ay0 = attacker.prevHeadY;
+    const ax1 = attacker.player.x;
+    const ay1 = attacker.player.y;
+
+    const headRadius = attacker.player.radius;
+    const segments = defender.collisionSegments;
+    
+    if (!segments || segments.length === 0) return Infinity;
+
+    const skip = attacker === defender ? 6 : 0;
+    let earliest = Infinity;
+
+    for (let i = skip; i < segments.length; i++) {
+      const s = segments[i];
+      // Use COLLISION_SEGMENT_RADIUS consistently
+      const t = this.segmentSweep(ax0, ay0, ax1, ay1, s.x, s.y, headRadius + this.COLLISION_SEGMENT_RADIUS);
+      if (t < earliest) earliest = t;
+    }
+
+    return earliest;
+  }
+
+  private segmentSweep(
+    ax0: number,
+    ay0: number,
+    ax1: number,
+    ay1: number,
+    cx: number,
+    cy: number,
+    radius: number
+  ): number {
+    const vx = ax1 - ax0;
+    const vy = ay1 - ay0;
+
+    const dx = ax0 - cx;
+    const dy = ay0 - cy;
+
+    const a = vx * vx + vy * vy;
+    const b = 2 * (dx * vx + dy * vy);
+    const c = dx * dx + dy * dy - radius * radius;
+
+    const disc = b * b - 4 * a * c;
+
+    if (disc < 0 || a === 0) return Infinity;
+
+    const sqrt = Math.sqrt(disc);
+    const t1 = (-b - sqrt) / (2 * a);
+    const t2 = (-b + sqrt) / (2 * a);
+
+    if (t1 >= 0 && t1 <= 1) return t1;
+    if (t2 >= 0 && t2 <= 1) return t2;
+
+    return Infinity;
   }
   
   private checkFoodCollisionsOptimized(snakeLogic: SnakeLogic) {
@@ -288,56 +271,6 @@ export class CollisionSystem {
     }
   }
   
-  private checkHeadToBodyOptimized(headSnake: SnakeLogic, bodySnake: SnakeLogic): boolean {
-    const headRadius = headSnake.player.radius;
-    const bodySegments = bodySnake.getSegmentsForCollision();
-    
-    if (bodySegments.length === 0) return false;
-    
-    // PINPOINT ACCURACY: Check every segment with continuous collision detection
-    for (let i = 0; i < bodySegments.length; i++) {
-      const segment = bodySegments[i];
-      const dx = headSnake.player.x - segment.x;
-      const dy = headSnake.player.y - segment.y;
-      const minDistance = headRadius + segment.radius;
-      
-      // FAIRNESS: Add 5% tolerance to prevent unfair deaths from side touches
-      const collisionThreshold = minDistance * minDistance * 0.95;
-      
-      if (dx * dx + dy * dy < collisionThreshold) {
-        return true;
-      }
-    }
-    
-    return false;
-  }
-  
-  private checkSelfCollisionOptimized(snakeLogic: SnakeLogic): boolean {
-    const headRadius = snakeLogic.player.radius;
-    const segments = snakeLogic.getSegmentsForCollision();
-    
-    if (segments.length < 15) return false; // Prevent early self-collision
-    
-    // PINPOINT ACCURACY: Check every segment after neck (index 15+)
-    const startIndex = Math.max(15, Math.floor(segments.length * 0.25));
-    
-    for (let i = startIndex; i < segments.length; i++) {
-      const segment = segments[i];
-      const dx = snakeLogic.player.x - segment.x;
-      const dy = snakeLogic.player.y - segment.y;
-      const minDistance = headRadius + segment.radius;
-      
-      // FAIRNESS: 10% tolerance for self-collision
-      const collisionThreshold = minDistance * minDistance * 0.9;
-      
-      if (dx * dx + dy * dy < collisionThreshold) {
-        return true;
-      }
-    }
-    
-    return false;
-  }
-  
   private consumeFood(snakeLogic: SnakeLogic, foodId: string, food: Food) {
     snakeLogic.grow(food.value);
     snakeLogic.player.score += food.value;
@@ -345,11 +278,6 @@ export class CollisionSystem {
     // Remove food from state and grid
     this.gameState.food.delete(foodId);
     this.removeFoodFromGrid(foodId, food.x, food.y);
-    
-    // Spawn new food if needed
-    if (this.gameState.food.size < 500) {
-      this.spawnFood(1);
-    }
   }
   
   private updateFoodGrid() {
@@ -382,72 +310,62 @@ export class CollisionSystem {
     }
   }
   
-  private spawnFood(count: number = 1) {
-    for (let i = 0; i < count; i++) {
-      const food = new Food();
-      let spawnX, spawnY;
-      
-      if (this.gameState.players.size > 0) {
-        const players = Array.from(this.gameState.players.values());
-        const randomPlayer = players[Math.floor(Math.random() * players.length)];
-        const angle = Math.random() * Math.PI * 2;
-        const distance = Math.random() * 1000;
-        
-        spawnX = randomPlayer.x + Math.cos(angle) * distance;
-        spawnY = randomPlayer.y + Math.sin(angle) * distance;
-      } else {
-        spawnX = (Math.random() - 0.5) * 10000;
-        spawnY = (Math.random() - 0.5) * 10000;
-      }
-      
-      food.x = spawnX;
-      food.y = spawnY;
-      food.value = PhysicsConfig.FOOD_VALUE;
-      
-      const foodId = `${Date.now()}-${i}`;
-      this.gameState.food.set(foodId, food);
-      
-      // Add to grid immediately
-      const cellX = Math.floor(spawnX / this.FOOD_CELL_SIZE);
-      const cellY = Math.floor(spawnY / this.FOOD_CELL_SIZE);
-      const cellKey = `${cellX},${cellY}`;
-      
-      if (!this.foodGrid.has(cellKey)) {
-        this.foodGrid.set(cellKey, new Set());
-      }
-      
-      this.foodGrid.get(cellKey)!.add(foodId);
-    }
-  }
-  
   private handleDeath(snakeLogic: SnakeLogic, reason: string) {
     console.log(`Snake ${snakeLogic.player.id} died: ${reason}`);
     
     // Convert to food pellets
     const pelletsToCreate = Math.max(1, Math.floor(snakeLogic.player.mass * 0.4));
-    
-    for (let i = 0; i < pelletsToCreate; i++) {
+
+    const segments = snakeLogic.getSegmentsForCollision();
+    let created = 0;
+
+    if (segments.length > 0) {
+      for (let i = 0; i < segments.length && created < pelletsToCreate; i += 3) {
+        const p = segments[i];
+        const food = new Food();
+
+        food.x = p.x + (Math.random() * 10 - 5);
+        food.y = p.y + (Math.random() * 10 - 5);
+        food.value = 1;
+
+        const foodId = `dead_${snakeLogic.player.id}_${created}_${Date.now()}`;
+        this.gameState.food.set(foodId, food);
+
+        const cellX = Math.floor(food.x / this.FOOD_CELL_SIZE);
+        const cellY = Math.floor(food.y / this.FOOD_CELL_SIZE);
+        const cellKey = `${cellX},${cellY}`;
+
+        if (!this.foodGrid.has(cellKey)) {
+          this.foodGrid.set(cellKey, new Set());
+        }
+
+        this.foodGrid.get(cellKey)!.add(foodId);
+        created++;
+      }
+    }
+
+    while (created < pelletsToCreate) {
       const food = new Food();
       const angle = Math.random() * Math.PI * 2;
       const distance = Math.random() * 100 + 50;
-      
+
       food.x = snakeLogic.player.x + Math.cos(angle) * distance;
       food.y = snakeLogic.player.y + Math.sin(angle) * distance;
       food.value = 1;
-      
-      const foodId = `dead_${snakeLogic.player.id}_${i}_${Date.now()}`;
+
+      const foodId = `dead_${snakeLogic.player.id}_${created}_${Date.now()}`;
       this.gameState.food.set(foodId, food);
-      
-      // Add to grid
+
       const cellX = Math.floor(food.x / this.FOOD_CELL_SIZE);
       const cellY = Math.floor(food.y / this.FOOD_CELL_SIZE);
       const cellKey = `${cellX},${cellY}`;
-      
+
       if (!this.foodGrid.has(cellKey)) {
         this.foodGrid.set(cellKey, new Set());
       }
-      
+
       this.foodGrid.get(cellKey)!.add(foodId);
+      created++;
     }
     
     // Respawn the snake
