@@ -30,15 +30,19 @@ export class Player extends Schema {
   @type("number") currentChunkY: number = 0;
   @type("number") boundingRadius: number = PHYSICS_CONSTANTS.BASE_RADIUS;
   @type("number") lastCollisionCheck: number = 0;
+  @type("number") headIndex: number = 0;
+  @type("number") tailIndex: number = 0;
 
   @type([SnakeSegment]) segments = new ArraySchema<SnakeSegment>();
-  @type([PathPoint]) pathPoints = new ArraySchema<PathPoint>();
 }
 
 export class Food extends Schema {
   @type("number") x: number = 0;
   @type("number") y: number = 0;
-  @type("number") value: number = 1;
+  @type("number") kind: number = 0;
+  @type("number") points: number = 100;
+  @type("number") segments: number = 0;
+  @type("number") mass: number = 0.2;
 }
 
 export class GameState extends Schema {

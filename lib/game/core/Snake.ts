@@ -1,9 +1,11 @@
 // server/src/Snake.ts
 import { Vector2, PhysicsConfig, normalize, angleDifference, checkCircleCollision, clamp, rotateTowards, wrapAngle, calculateSnakeRadius, calculateBoostDrain } from './Physics';
 import { Player, SnakeSegment } from './State';
+import { World } from "./World";
 
 export class SnakeLogic {
   player: Player;
+  ecsId: number = -1;
   private internalSegments: { 
     x: number; y: number; 
     prevX: number; prevY: number;
@@ -44,6 +46,15 @@ export class SnakeLogic {
 
     this.lastHistoryX = player.x;
     this.lastHistoryY = player.y;
+
+    this.ecsId = World.snakeCount++;
+    const id = this.ecsId;
+    World.snakePosX[id] = player.x;
+    World.snakePosY[id] = player.y;
+    World.snakeVelX[id] = 0;
+    World.snakeVelY[id] = 0;
+    World.snakeRadius[id] = player.radius;
+    World.snakeAlive[id] = 1;
   }
 
   initSegments() {
@@ -72,6 +83,7 @@ export class SnakeLogic {
   }
 
   update(dt: number, input: { vector: Vector2, boost: boolean }) {
+    this.player.alive = !!World.snakeAlive[this.ecsId];
     if (!this.player.alive) return;
 
     // 0. Update Dynamic Stats
@@ -143,10 +155,15 @@ export class SnakeLogic {
     
     // 3. Move Forward (Fixed Time Step for Consistent Speed)
     const moveDist = this.player.speed * fixedDt;
-    this.player.x += this.dirX * moveDist;
-    this.player.y += this.dirY * moveDist;
+    World.snakeVelX[this.ecsId] = this.dirX * moveDist;
+    World.snakeVelY[this.ecsId] = this.dirY * moveDist;
 
     // 4. ---- Update head position history ----
+    {
+      const id = this.ecsId;
+      this.player.x = World.snakePosX[id];
+      this.player.y = World.snakePosY[id];
+    }
     this.headHistory.unshift({ x: this.player.x, y: this.player.y });
     
     // Trim history to required length (ensure enough for smooth turns)

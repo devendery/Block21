@@ -43,7 +43,6 @@ if (g.__COLYSEUS_SCHEMA_CACHE__) {
     history: {x: number, y: number}[] = [];
 
     @type([SnakeSegmentDef]) segments = new ArraySchema<SnakeSegmentDef>();
-    @type([PathPointDef]) pathPoints = new ArraySchema<PathPointDef>();
   }
 
   class FoodDef extends Schema {

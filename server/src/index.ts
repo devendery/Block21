@@ -1,22 +1,77 @@
-// server/src/index.ts
+// server/src/index.ts - OPTIMIZED VERSION
 import http from "http";
 import express from "express";
 import cors from "cors";
 import { Server, Room, Client } from "colyseus";
 import { StateView, Encoder } from "@colyseus/schema";
+import { performance } from "perf_hooks";
 import { GameState, Player, SnakeSegment, Food } from "./State";
 import { SnakeLogic } from "./Snake";
 import { AISnakeController } from "./AISnakeController";
 import { PhysicsConfig, checkCircleCollision, calculateSnakeRadius } from "./Physics";
 import { CollisionSystem } from "./CollisionSystem";
 import { PersistenceSystem } from "./PersistenceSystem";
+import { FoodSystem } from "./FoodSystem";
+import { runECSTick } from "../../lib/ecs/ECSOrchestrator";
+import { resetWorld } from "../../lib/game/core/World";
+import { syncLegacySnakes } from "../../lib/ecs/SyncSystem";
 import { SERVER_CONSTANTS } from "./ServerConstants";
 
 Encoder.BUFFER_SIZE = SERVER_CONSTANTS.ENCODER_BUFFER_SIZE;
 
+const PERF_SAMPLE_LIMIT = 100;
+const PERF_LOG_INTERVAL_MS = 5000;
+
+const humanPhysicsTimes: number[] = [];
+const aiPhysicsTimes: number[] = [];
+const ecsTimes: number[] = [];
+const collisionTimes: number[] = [];
+const aoiTimes: number[] = [];
+const gridTimes: number[] = [];
+
+let lastSectionPerfLogMs = 0;
+
+function pushSample(samples: number[], valueMs: number): void {
+  samples.push(valueMs);
+  if (samples.length > PERF_SAMPLE_LIMIT) samples.shift();
+}
+
+function average(samples: number[]): number {
+  if (samples.length === 0) return 0;
+  let sum = 0;
+  for (let i = 0; i < samples.length; i++) sum += samples[i];
+  return sum / samples.length;
+}
+
+function maybeLogSectionPerf(nowMs: number): void {
+  if (lastSectionPerfLogMs === 0) lastSectionPerfLogMs = nowMs;
+  if (nowMs - lastSectionPerfLogMs < PERF_LOG_INTERVAL_MS) return;
+
+  const humanAvg = average(humanPhysicsTimes);
+  const aiAvg = average(aiPhysicsTimes);
+  const ecsAvg = average(ecsTimes);
+  const collisionAvg = average(collisionTimes);
+  const aoiAvg = average(aoiTimes);
+  const gridAvg = average(gridTimes);
+
+  console.log(
+    `[CPU] physics(human): ${humanAvg.toFixed(2)}ms | physics(ai): ${aiAvg.toFixed(2)}ms | ecs: ${ecsAvg.toFixed(2)}ms | collision: ${collisionAvg.toFixed(2)}ms | aoi: ${aoiAvg.toFixed(2)}ms | grid: ${gridAvg.toFixed(2)}ms (${gridTimes.length})`
+  );
+
+  humanPhysicsTimes.length = 0;
+  aiPhysicsTimes.length = 0;
+  ecsTimes.length = 0;
+  collisionTimes.length = 0;
+  aoiTimes.length = 0;
+  gridTimes.length = 0;
+  lastSectionPerfLogMs = nowMs;
+}
+
 class SpatialGrid {
   private cellSize: number;
-  private cells: Map<string, Set<string>> = new Map();
+  private cells: Map<number, string[]> = new Map();
+  private entityLoc: Map<string, { key: number; index: number }> = new Map();
+  private queryResult: string[] = [];
 
   constructor(cellSize: number) {
     this.cellSize = cellSize;
@@ -24,45 +79,102 @@ class SpatialGrid {
 
   clear() {
     this.cells.clear();
+    this.entityLoc.clear();
   }
 
-  private key(cx: number, cy: number) {
-    return `${cx},${cy}`;
+  private cellKeyFromCoords(cx: number, cy: number): number {
+    return (cx << 16) ^ (cy & 0xffff);
   }
 
-  insert(id: string, x: number, y: number) {
-    const cx = Math.floor(x / this.cellSize);
-    const cy = Math.floor(y / this.cellSize);
-    const k = this.key(cx, cy);
-    let bucket = this.cells.get(k);
-    if (!bucket) {
-      bucket = new Set<string>();
-      this.cells.set(k, bucket);
+  private cellCoords(x: number, y: number): { cx: number; cy: number } {
+    return {
+      cx: Math.floor(x / this.cellSize),
+      cy: Math.floor(y / this.cellSize),
+    };
+  }
+
+  upsert(id: string, x: number, y: number) {
+    const { cx, cy } = this.cellCoords(x, y);
+    const newKey = this.cellKeyFromCoords(cx, cy);
+    const current = this.entityLoc.get(id);
+
+    if (current && current.key === newKey) {
+      return;
     }
-    bucket.add(id);
-  }
 
-  query(x: number, y: number, radius: number): Set<string> {
-    const result = new Set<string>();
-    const minX = Math.floor((x - radius) / this.cellSize);
-    const maxX = Math.floor((x + radius) / this.cellSize);
-    const minY = Math.floor((y - radius) / this.cellSize);
-    const maxY = Math.floor((y + radius) / this.cellSize);
-    for (let cx = minX; cx <= maxX; cx++) {
-      for (let cy = minY; cy <= maxY; cy++) {
-        const bucket = this.cells.get(this.key(cx, cy));
-        if (!bucket) continue;
-        bucket.forEach((id) => result.add(id));
+    if (current) {
+      const oldCell = this.cells.get(current.key);
+      if (oldCell) {
+        const index = current.index;
+        if (index < oldCell.length - 1) {
+          oldCell[index] = oldCell[oldCell.length - 1];
+          const swappedId = oldCell[index];
+          const swappedLoc = this.entityLoc.get(swappedId);
+          if (swappedLoc) swappedLoc.index = index;
+        }
+        oldCell.pop();
+        if (oldCell.length === 0) {
+          this.cells.delete(current.key);
+        }
       }
     }
-    return result;
+
+    let cell = this.cells.get(newKey);
+    if (!cell) {
+      cell = [];
+      this.cells.set(newKey, cell);
+    }
+    const newIndex = cell.length;
+    cell.push(id);
+    this.entityLoc.set(id, { key: newKey, index: newIndex });
+  }
+
+  remove(id: string) {
+    const loc = this.entityLoc.get(id);
+    if (!loc) return;
+
+    const cell = this.cells.get(loc.key);
+    if (cell) {
+      const index = loc.index;
+      if (index < cell.length - 1) {
+        cell[index] = cell[cell.length - 1];
+        const swappedId = cell[index];
+        const swappedLoc = this.entityLoc.get(swappedId);
+        if (swappedLoc) swappedLoc.index = index;
+      }
+      cell.pop();
+      if (cell.length === 0) {
+        this.cells.delete(loc.key);
+      }
+    }
+    this.entityLoc.delete(id);
+  }
+
+  query(x: number, y: number, radius: number): string[] {
+    this.queryResult.length = 0;
+
+    const { cx: centerCx, cy: centerCy } = this.cellCoords(x, y);
+    const radiusCells = Math.ceil(radius / this.cellSize);
+
+    for (let dx = -radiusCells; dx <= radiusCells; dx++) {
+      for (let dy = -radiusCells; dy <= radiusCells; dy++) {
+        const key = this.cellKeyFromCoords(centerCx + dx, centerCy + dy);
+        const cell = this.cells.get(key);
+        if (!cell) continue;
+        for (let i = 0; i < cell.length; i++) {
+          this.queryResult.push(cell[i]);
+        }
+      }
+    }
+
+    return this.queryResult;
   }
 }
 
 class Block21Room extends Room<GameState> {
   // Game Loop
   snakes: Map<string, SnakeLogic> = new Map();
-  private aiSnakes: Map<string, AISnakeController> = new Map(); // AI snake controllers
+  private aiSnakes: Map<string, AISnakeController> = new Map();
   private collisionSystem!: CollisionSystem;
   private persistenceSystem!: PersistenceSystem;
   private clientViews: Map<string, StateView> = new Map();
@@ -73,6 +185,33 @@ class Block21Room extends Room<GameState> {
   private readonly GRID_REBUILD_EVERY = SERVER_CONSTANTS.GRID_REBUILD_EVERY;
   private arenaTier = 1;
   private arenaRadius: number = SERVER_CONSTANTS.ARENA_TIER_RADII[1];
+
+  // ⚠️ CRITICAL FIX: Load balancing and frame skipping
+  private lastTickTime = 0;
+  private readonly tickBudgetMs = 1000 / SERVER_CONSTANTS.TICK_RATE;
+  private slowFrameCounter = 0;
+  private skipAITick = false;
+  private performanceStats = {
+    frameTimes: [] as number[],
+    lastStatLog: 0,
+    avgFrameTime: 0
+  };
+
+  // ⚠️ OPTIMIZATION: Batch processing
+  private aiUpdateQueue: string[] = [];
+  private aiUpdateIndex = 0;
+  private aiBatchSize = 3; // Update 3 AI snakes per frame
+  private aoiUpdateCursor = 0;
+  private foodSystem = new FoodSystem();
+  private scratchPlayers = new Set<string>();
+  private scratchFood = new Map<string, Food>();
+  private lastAoiUpdateMs = new Map<string, number>();
+  private lastAoiCenter = new Map<string, { x: number; y: number }>();
+  private readonly AOI_UPDATE_TIERS = {
+    HIGH: 33,
+    NORMAL: 100,
+    LOW: 200
+  };
 
   getArenaRadius() {
     return this.arenaRadius;
@@ -94,22 +233,28 @@ class Block21Room extends Room<GameState> {
     return base + (max - base) * Math.sqrt(progress);
   }
 
-  onCreate (options: any) {
-    console.log("Block21 Room Created! (ARENA VERSION) with options:", options);
+  onCreate(options: any) {
+    console.log("Block21 Room Created! (OPTIMIZED VERSION)");
+    resetWorld();
     this.setState(new GameState());
     
-    // Initialize systems
-    this.collisionSystem = new CollisionSystem(this.state);
+    this.collisionSystem = new CollisionSystem(this.state, {
+      onFoodAdded: (foodId, food) => {
+        this.foodGrid.upsert(foodId, food.x, food.y);
+      },
+      onFoodRemoved: (foodId) => {
+        this.foodGrid.remove(foodId);
+      }
+    });
     this.persistenceSystem = new PersistenceSystem();
 
-    // Message Handlers
     this.onMessage("input", (client, input) => {
       const snake = this.snakes.get(client.sessionId);
       if (!snake) return;
       snake.lastInput = input;
     });
 
-    // ✅ SINGLE game loop
+    // ⚠️ OPTIMIZATION: Use fixed time step with catch-up
     this.setSimulationInterval(
       (deltaTime) => this.update(deltaTime),
       1000 / SERVER_CONSTANTS.TICK_RATE
@@ -121,34 +266,28 @@ class Block21Room extends Room<GameState> {
     this.spawnFood(this.getTargetFoodCount());
   }
 
-  onJoin (client: Client, options: any) {
+  onJoin(client: Client, options: any) {
     console.log(client.sessionId, "joined!");
     
-    // Create Player State
     const player = new Player();
     player.id = client.sessionId;
     
     const spawn = this.randomPointInArena(this.arenaRadius * 0.85);
     player.x = spawn.x;
     player.y = spawn.y;
-   // player.angle = Math.random() * Math.PI * 2;
-   // Line 114: Change from Math.random() * Math.PI * 2 to Math.PI / 2
-    player.angle = Math.PI / 2; // Snake starts facing UP
+    player.angle = Math.PI / 2;
     player.name = options.name || "Anonymous";
     player.radius = PhysicsConfig.BASE_RADIUS;
-    
-    // Assign Random Skin (0 to 5)
     player.skin = Math.floor(Math.random() * SERVER_CONSTANTS.SKIN_COUNT);
     
     this.state.players.set(client.sessionId, player);
+    this.playersGrid.upsert(client.sessionId, player.x, player.y);
 
-    // Initialize Physics Logic for this player
     const snakeLogic = new SnakeLogic(player, this);
     snakeLogic.initSegments();
     this.snakes.set(client.sessionId, snakeLogic);
     this.collisionSystem.registerSnakeLogic(client.sessionId, snakeLogic);
 
-    // Initialize AOI view for this client
     const view = new StateView();
     (client as any).view = view;
     this.clientViews.set(client.sessionId, view);
@@ -157,51 +296,43 @@ class Block21Room extends Room<GameState> {
       food: new Map<string, Food>() 
     });
     
-    // Always see yourself
     view.add(player);
 
-    // Load saved progress
     const savedData = this.persistenceSystem.loadPlayer(client.sessionId);
     if (savedData) {
       console.log(`Loaded saved data for ${player.name}: highScore=${savedData.highScore}`);
     }
 
-    // Welcome message
     client.send("welcome", {
-      message: "Welcome to Worms Zone Arena!",
-      features: ["elastic_arena", "center_density", "persistent_progress"]
+      message: "Welcome to Worms Zone Arena! (Optimized)",
+      features: ["optimized_performance", "dynamic_load_balancing"]
     });
 
-    // Spawn AI snakes (1 player = 20 AI snakes)
     this.spawnAISnakes(player);
   }
 
-  onLeave (client: Client, consented: boolean) {
+  onLeave(client: Client, consented: boolean) {
     console.log(client.sessionId, "left!");
     
     const player = this.state.players.get(client.sessionId);
     if (player) {
-      // Save player progress
       this.persistenceSystem.savePlayer(player);
-      
-      // Convert snake to food on disconnect
       this.convertSnakeToFood(client.sessionId);
     }
     
     this.collisionSystem.unregisterSnakeLogic(client.sessionId);
+    this.playersGrid.remove(client.sessionId);
     this.state.players.delete(client.sessionId);
     this.snakes.delete(client.sessionId);
     this.clientViews.delete(client.sessionId);
     this.clientAOI.delete(client.sessionId);
     
-    // Clean up AI snakes when player leaves
     this.removeAllAISnakes();
   }
 
   onDispose() {
     console.log("room disposed");
     
-    // Save all players before shutdown
     this.state.players.forEach(player => {
       this.persistenceSystem.savePlayer(player);
     });
@@ -209,17 +340,25 @@ class Block21Room extends Room<GameState> {
     this.persistenceSystem.shutdown();
   }
 
+  // ⚠️ CRITICAL FIX: Optimized update with load balancing
   update(deltaTime: number) {
     const frameStart = performance.now();
-    const dt = deltaTime / 1000;
+    
+    // Skip frame if server is overloaded
+    if (frameStart - this.lastTickTime < this.tickBudgetMs) {
+      return;
+    }
+    
+    // Cap deltaTime to prevent spiral of death
+    const dt = Math.min(deltaTime / 1000, 0.1);
     this.tickCounter++;
-
+    
     const arena = this.computeArena();
     this.arenaTier = arena.tier;
     this.arenaRadius = arena.radius;
 
-    
-    // Update all snakes
+    // Update human players
+    const humanUpdateStart = performance.now();
     this.snakes.forEach((snake, sessionId) => {
       if (this.aiSnakes.has(sessionId)) return;
       if (!snake.player.alive) return;
@@ -230,162 +369,262 @@ class Block21Room extends Room<GameState> {
       };
 
       snake.update(dt, input);
+      this.playersGrid.upsert(sessionId, snake.player.x, snake.player.y);
       
       const seq = (input as any).seq;
       if (typeof seq === "number") {
         snake.player.lastAckInputSeq = seq;
       }
     });
+    const humanUpdateTime = performance.now() - humanUpdateStart;
+    pushSample(humanPhysicsTimes, humanUpdateTime);
 
-    const elapsedAfterPlayers = performance.now() - frameStart;
-    const budgetMs = 1000 / SERVER_CONSTANTS.TICK_RATE;
-    const slowFrame = elapsedAfterPlayers > budgetMs;
+    // Dynamic AI update skipping based on load
+    const budgetUsed = humanUpdateTime / this.tickBudgetMs;
+    this.skipAITick = budgetUsed > 0.7 || this.slowFrameCounter > 3;
 
-    if (!slowFrame) {
-      this.aiSnakes.forEach((aiController, aiId) => {
+    let aiUpdateTime = 0;
+    if (!this.skipAITick) {
+      const aiUpdateStart = performance.now();
+      
+      // ⚠️ OPTIMIZATION: Batch AI updates
+      if (this.aiUpdateQueue.length !== this.aiSnakes.size) {
+        this.aiUpdateQueue = Array.from(this.aiSnakes.keys());
+        this.aiUpdateIndex = 0;
+      }
+      
+      const MAX_AI_PER_FRAME = 5;
+      const batchSize = Math.min(MAX_AI_PER_FRAME, this.aiUpdateQueue.length);
+      for (let i = 0; i < batchSize; i++) {
+        const aiId = this.aiUpdateQueue[this.aiUpdateIndex];
+        this.aiUpdateIndex = (this.aiUpdateIndex + 1) % this.aiUpdateQueue.length;
+        
+        const aiController = this.aiSnakes.get(aiId);
         const snake = this.snakes.get(aiId);
-        if (!snake || !snake.player.alive) return;
+        
+        if (!aiController || !snake || !snake.player.alive) continue;
+        
         const aiInput = aiController.update(dt);
         snake.update(dt, aiInput);
-      });
-    }
-
-    if (!slowFrame) {
-      if (this.tickCounter % 60 === 0) {
-        this.keepAISnakesNearHumans();
+        this.playersGrid.upsert(aiId, snake.player.x, snake.player.y);
+      }
+      
+      aiUpdateTime = performance.now() - aiUpdateStart;
+      pushSample(aiPhysicsTimes, aiUpdateTime);
+      
+      // Adjust batch size based on performance
+      if (aiUpdateTime > this.tickBudgetMs * 0.2) {
+        this.aiBatchSize = Math.max(1, this.aiBatchSize - 1);
+      } else if (aiUpdateTime < this.tickBudgetMs * 0.05) {
+        this.aiBatchSize = Math.min(5, this.aiBatchSize + 1);
       }
     }
 
-    // Update collision system
-    this.collisionSystem.update();
-
-    // Rebuild spatial grids periodically
-    if (!slowFrame && this.tickCounter % this.GRID_REBUILD_EVERY === 0) {
-      this.playersGrid.clear();
-      this.state.players.forEach((p, id) => {
-        this.playersGrid.insert(id, p.x, p.y);
-      });
-
-      this.foodGrid.clear();
-      this.state.food.forEach((f, id) => {
-        this.foodGrid.insert(id, f.x, f.y);
-      });
+    // Periodic AI repositioning (less frequent)
+    if (!this.skipAITick && this.tickCounter % 180 === 0) { // Every 6 seconds at 30Hz
+      this.keepAISnakesNearHumans();
     }
 
-    // AOI filtering per client
-    this.clients.forEach((client) => {
+    // ECS update
+    const ecsStart = performance.now();
+    runECSTick();
+    const ecsTime = performance.now() - ecsStart;
+    pushSample(ecsTimes, ecsTime);
+    syncLegacySnakes(Array.from(this.snakes.values()));
+    
+    const collisionStart = performance.now();
+    this.collisionSystem.update();
+    const collisionTime = performance.now() - collisionStart;
+    pushSample(collisionTimes, collisionTime);
+
+    // ⚠️ OPTIMIZATION: Staggered AOI updates
+    const aoiUpdateStart = performance.now();
+    const clientCount = this.clients.length;
+    const maxUpdates = this.skipAITick ? 3 : 5;
+    const now = performance.now();
+    
+    let clientsUpdated = 0;
+    for (let i = 0; i < clientCount && clientsUpdated < maxUpdates; i++) {
+      const clientIndex = (this.aoiUpdateCursor + i) % clientCount;
+      const client = this.clients[clientIndex];
+
       const myId = client.sessionId;
       const me = this.state.players.get(myId);
       const view = this.clientViews.get(myId);
       const aoi = this.clientAOI.get(myId);
-      if (!me || !view || !aoi) return;
-
-      const radius = this.getAoiRadius(me);
-      const radiusSq = radius * radius;
-
-      // Players in AOI
-      const newPlayers = new Set<string>();
-      const playerCandidates = this.playersGrid.query(me.x, me.y, radius);
-      playerCandidates.forEach((pid) => {
-        const p = this.state.players.get(pid);
-        if (!p) return;
-        
-        if (!p.alive) {
-          newPlayers.add(pid);
-          return;
-        }
-
-        const dx = p.x - me.x;
-        const dy = p.y - me.y;
-        if ((dx * dx + dy * dy) <= radiusSq) {
-          newPlayers.add(pid);
-        }
-      });
-      newPlayers.add(myId);
-
-      // Remove players no longer in AOI
-      aoi.players.forEach((pid) => {
-        if (newPlayers.has(pid)) return;
-        const p = this.state.players.get(pid);
-        if (p) view.remove(p);
-      });
       
-      // Update player chunk positions
-  this.state.players.forEach((player, playerId) => {
-    const chunkX = Math.floor(player.x / PhysicsConfig.CHUNK_SIZE);
-    const chunkY = Math.floor(player.y / PhysicsConfig.CHUNK_SIZE);
-    
-    if (player.currentChunkX !== chunkX || player.currentChunkY !== chunkY) {
-      player.currentChunkX = chunkX;
-      player.currentChunkY = chunkY;
-      // Could trigger chunk loading/unloading here
+      if (!me || !view || !aoi) continue;
+
+      const lastUpdate = this.lastAoiUpdateMs.get(myId) || 0;
+      const updateInterval = this.skipAITick ? this.AOI_UPDATE_TIERS.LOW : this.AOI_UPDATE_TIERS.NORMAL;
+      if (now - lastUpdate < updateInterval) continue;
+      
+      this.updateClientAOI(myId, me, view, aoi);
+      clientsUpdated++;
     }
-  });
+    this.aoiUpdateCursor = (this.aoiUpdateCursor + Math.max(1, clientsUpdated)) % Math.max(1, clientCount);
+    const aoiTime = performance.now() - aoiUpdateStart;
+    pushSample(aoiTimes, aoiTime);
 
-      // Add new players
-      newPlayers.forEach((pid) => {
-        if (aoi.players.has(pid)) return;
-        const p = this.state.players.get(pid);
-        if (p) view.add(p);
-      });
-      aoi.players = newPlayers;
-
-      // Food in AOI
-      const newFood = new Map<string, Food>();
-      const foodAOIRadius = PhysicsConfig.AOI_RADIUS * SERVER_CONSTANTS.FOOD_AOI_SCALE;
-      const foodRadiusSq = foodAOIRadius * foodAOIRadius;
-      const foodCandidates = this.foodGrid.query(me.x, me.y, foodAOIRadius);
-      
-      foodCandidates.forEach((fid) => {
-        const f = this.state.food.get(fid);
-        if (!f) return;
-        const dx = f.x - me.x;
-        const dy = f.y - me.y;
-        if ((dx * dx + dy * dy) <= foodRadiusSq) {
-          newFood.set(fid, f);
-        }
-      });
-
-      // Remove food no longer in AOI
-      aoi.food.forEach((f, fid) => {
-        if (newFood.has(fid)) return;
-        view.remove(f);
-      });
-
-      // Add new food
-      newFood.forEach((f, fid) => {
-        if (aoi.food.has(fid)) return;
-        view.add(f);
-      });
-      aoi.food = newFood;
-    });
-
+    // Food spawning with budget check
     const targetFoodCount = this.getTargetFoodCount();
-    if (this.state.food.size < targetFoodCount) {
-      this.spawnFood(Math.min(
+    if (this.state.food.size < targetFoodCount && !this.skipAITick) {
+      const spawnCount = Math.min(
         SERVER_CONSTANTS.FOOD_SPAWN_MAX_PER_TICK,
         targetFoodCount - this.state.food.size
-      ));
+      );
+      
+      if (spawnCount > 0) {
+        this.spawnFood(spawnCount);
+      }
     }
 
     const frameEnd = performance.now();
     const frameTime = frameEnd - frameStart;
-    if (frameTime > budgetMs) {
-      console.warn("Frame slow:", frameTime.toFixed(2), "ms");
+    
+    // Performance monitoring
+    this.performanceStats.frameTimes.push(frameTime);
+    if (this.performanceStats.frameTimes.length > 100) {
+      this.performanceStats.frameTimes.shift();
     }
+    
+    if (frameEnd - this.performanceStats.lastStatLog > 10000) { // Log every 10 seconds
+      const avg = this.performanceStats.frameTimes.reduce((a, b) => a + b, 0) / 
+                 this.performanceStats.frameTimes.length;
+      console.log(`[PERF] Avg frame: ${avg.toFixed(2)}ms, Clients: ${clientCount}, AI: ${this.aiSnakes.size}`);
+      this.performanceStats.lastStatLog = frameEnd;
+    }
+
+    maybeLogSectionPerf(frameEnd);
+
+    // Load balancing decisions
+    if (frameTime > this.tickBudgetMs * 1.2) {
+      this.slowFrameCounter++;
+      if (this.slowFrameCounter > 5) {
+        console.warn(`High load detected: ${frameTime.toFixed(2)}ms, reducing AI`);
+        this.removeSomeAISnakes(Math.ceil(this.aiSnakes.size * 0.25));
+      }
+    } else if (frameTime < this.tickBudgetMs * 0.8) {
+      this.slowFrameCounter = Math.max(0, this.slowFrameCounter - 1);
+    }
+    
+    this.lastTickTime = frameStart;
+  }
+
+  // ⚠️ OPTIMIZATION: Dedicated AOI update method
+  private updateClientAOI(myId: string, me: Player, view: StateView, aoi: { players: Set<string>; food: Map<string, Food> }) {
+    if (this.skipAITick) return;
+
+    const now = performance.now();
+    const lastUpdate = this.lastAoiUpdateMs.get(myId) || 0;
+    const lastCenter = this.lastAoiCenter.get(myId);
+
+    let updateInterval = this.AOI_UPDATE_TIERS.NORMAL;
+    if (this.slowFrameCounter > 3 || this.skipAITick) {
+      updateInterval = this.AOI_UPDATE_TIERS.LOW;
+    } else if ((me.length || 0) > 1000) {
+      updateInterval = this.AOI_UPDATE_TIERS.HIGH;
+    }
+
+    let shouldUpdate = false;
+    if (!lastCenter) {
+      shouldUpdate = true;
+    } else {
+      const dx = me.x - lastCenter.x;
+      const dy = me.y - lastCenter.y;
+      const moveSq = dx * dx + dy * dy;
+      shouldUpdate = moveSq > 14400 || (now - lastUpdate) >= updateInterval;
+    }
+    if (!shouldUpdate) return;
+
+    const radius = this.getAoiRadius(me);
+    const radiusSq = radius * radius;
+
+    this.scratchPlayers.clear();
+    this.scratchFood.clear();
+
+    this.scratchPlayers.add(myId);
+
+    const playerCandidates = this.playersGrid.query(me.x, me.y, radius);
+    for (let i = 0; i < playerCandidates.length; i++) {
+      const pid = playerCandidates[i];
+      const p = this.state.players.get(pid);
+      if (!p) continue;
+
+      if (!p.alive) {
+        this.scratchPlayers.add(pid);
+        continue;
+      }
+
+      if (pid === myId) continue;
+
+      const dx = p.x - me.x;
+      const dy = p.y - me.y;
+      if (dx * dx + dy * dy <= radiusSq) {
+        this.scratchPlayers.add(pid);
+      }
+    }
+
+    for (const pid of aoi.players) {
+      if (this.scratchPlayers.has(pid)) continue;
+      const p = this.state.players.get(pid);
+      if (p) view.remove(p);
+    }
+
+    for (const pid of this.scratchPlayers) {
+      if (aoi.players.has(pid)) continue;
+      if (pid === myId) continue;
+      const p = this.state.players.get(pid);
+      if (p) view.add(p);
+    }
+
+    aoi.players.clear();
+    for (const pid of this.scratchPlayers) {
+      aoi.players.add(pid);
+    }
+
+    const foodAOIRadius = PhysicsConfig.AOI_RADIUS * SERVER_CONSTANTS.FOOD_AOI_SCALE;
+    const foodRadiusSq = foodAOIRadius * foodAOIRadius;
+    const foodCandidates = this.foodGrid.query(me.x, me.y, foodAOIRadius);
+
+    for (let i = 0; i < foodCandidates.length; i++) {
+      const fid = foodCandidates[i];
+      const f = this.state.food.get(fid);
+      if (!f) continue;
+      const dx = f.x - me.x;
+      const dy = f.y - me.y;
+      if (dx * dx + dy * dy <= foodRadiusSq) {
+        this.scratchFood.set(fid, f);
+      }
+    }
+
+    for (const [fid, food] of aoi.food) {
+      if (this.scratchFood.has(fid)) continue;
+      view.remove(food);
+    }
+
+    for (const [fid, food] of this.scratchFood) {
+      if (aoi.food.has(fid)) continue;
+      view.add(food);
+    }
+
+    aoi.food.clear();
+    for (const [fid, food] of this.scratchFood) {
+      aoi.food.set(fid, food);
+    }
+
+    this.lastAoiUpdateMs.set(myId, now);
+    this.lastAoiCenter.set(myId, { x: me.x, y: me.y });
   }
 
   private spawnFood(count: number = 1) {
     for (let i = 0; i < count; i++) {
-      const food = new Food();
       const p = this.randomPointInArenaWithCenterWeight();
-      food.x = p.x;
-      food.y = p.y;
-      food.value = PhysicsConfig.FOOD_VALUE;
+      const food = this.foodSystem.createFood(p.x, p.y);
 
       const id = Math.random().toString(36).substr(2, SERVER_CONSTANTS.FOOD_ID_LENGTH);
       this.state.food.set(id, food);
-      this.foodGrid.insert(id, food.x, food.y);
+      this.collisionSystem.addFoodToGrid(id, food);
     }
   }
 
@@ -454,7 +693,6 @@ class Block21Room extends Room<GameState> {
   }
 
   private spawnSingleAISnake(index: number, anchorPlayer?: Player) {
-    // Create AI player state
     const player = new Player();
     player.id = `ai_${index}_${Date.now()}`;
     
@@ -468,25 +706,18 @@ class Block21Room extends Room<GameState> {
       player.x = (Math.random() - 0.5) * SERVER_CONSTANTS.PLAYER_SPAWN_RANGE;
       player.y = (Math.random() - 0.5) * SERVER_CONSTANTS.PLAYER_SPAWN_RANGE;
     }
-    player.angle = -Math.PI / 2; // Face UP like player snakes
+    player.angle = -Math.PI / 2;
     player.name = `AI_${Math.floor(Math.random() * 1000)}`;
     player.radius = PhysicsConfig.BASE_RADIUS;
     player.skin = Math.floor(Math.random() * SERVER_CONSTANTS.SKIN_COUNT);
     
-    // Add to game state
     this.state.players.set(player.id, player);
     
-    // Initialize snake logic
     const snakeLogic = new SnakeLogic(player, this);
     snakeLogic.initSegments();
-    
-    // Create AI controller
     const aiController = new AISnakeController(snakeLogic);
     
-    // Register with collision system
     this.collisionSystem.registerSnakeLogic(player.id, snakeLogic);
-    
-    // Store references
     this.snakes.set(player.id, snakeLogic);
     this.aiSnakes.set(player.id, aiController);
   }
@@ -538,20 +769,37 @@ class Block21Room extends Room<GameState> {
   }
 
   private removeAllAISnakes() {
-    // Remove all AI snakes from the game
     for (const [aiId, aiController] of this.aiSnakes) {
       this.state.players.delete(aiId);
       this.snakes.delete(aiId);
       this.collisionSystem.unregisterSnakeLogic(aiId);
     }
     this.aiSnakes.clear();
+    this.aiUpdateQueue = [];
+    this.aiUpdateIndex = 0;
+  }
+
+  // ⚠️ NEW: Remove some AI snakes when overloaded
+  private removeSomeAISnakes(count: number) {
+    const aiIds = Array.from(this.aiSnakes.keys());
+    const toRemove = aiIds.slice(0, Math.min(count, aiIds.length));
+    
+    for (const aiId of toRemove) {
+      this.state.players.delete(aiId);
+      this.snakes.delete(aiId);
+      this.collisionSystem.unregisterSnakeLogic(aiId);
+      this.aiSnakes.delete(aiId);
+    }
+    
+    console.log(`Removed ${toRemove.length} AI snakes due to high load`);
+    this.aiUpdateQueue = Array.from(this.aiSnakes.keys());
+    this.aiUpdateIndex = 0;
   }
 
   convertSnakeToFood(playerId: string) {
     const snakeLogic = this.snakes.get(playerId);
     if (!snakeLogic) return;
 
-    // Convert 40% of snake to food (Worms Zone style)
     const pelletsToCreate = Math.max(
       1,
       Math.floor(snakeLogic.player.mass * SERVER_CONSTANTS.DISCONNECT_FOOD_FRACTION)
@@ -568,14 +816,16 @@ class Block21Room extends Room<GameState> {
       
       food.x = snakeLogic.player.x + Math.cos(angle) * distance;
       food.y = snakeLogic.player.y + Math.sin(angle) * distance;
-      food.value = SERVER_CONSTANTS.DISCONNECT_FOOD_VALUE;
+      food.kind = 0;
+      food.points = 100 * SERVER_CONSTANTS.DISCONNECT_FOOD_VALUE;
+      food.segments = SERVER_CONSTANTS.DISCONNECT_FOOD_VALUE;
+      food.mass = 4 + Math.random() * 4;
       
       const id = `dead_${playerId}_${i}_${Date.now()}`;
       this.state.food.set(id, food);
-      this.foodGrid.insert(id, food.x, food.y);
+      this.collisionSystem.addFoodToGrid(id, food);
     }
   }
-
 }
 
 const app = express();
@@ -591,5 +841,5 @@ const region = process.env.BLOCK21_REGION || "local";
 gameServer.define(roomName, Block21Room);
 
 gameServer.listen(2567);
-console.log(`🔄 ARENA VERSION: Listening on ws://localhost:2567`);
-console.log(`🌍 Features: Worms.Zone Arena | Center Density | PvP Focus`);
+console.log(`⚡ OPTIMIZED SERVER: Listening on ws://localhost:2567`);
+console.log(`📊 Features: Load Balancing | Dynamic AI | Performance Monitoring`);

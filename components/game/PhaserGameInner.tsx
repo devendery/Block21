@@ -21,7 +21,7 @@ export default function PhaserGameInner() {
       if (!isMounted) return;
 
       const config: Phaser.Types.Core.GameConfig = {
-        type: Phaser.AUTO,
+        type: Phaser.CANVAS,
         parent: containerRef.current,
         width: window.innerWidth,
         height: window.innerHeight,
@@ -32,6 +32,9 @@ export default function PhaserGameInner() {
           arcade: {
             debug: false,
           },
+        },
+        render: {
+          antialias: false,
         },
         scale: {
           mode: Phaser.Scale.RESIZE,
